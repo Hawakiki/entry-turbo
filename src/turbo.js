@@ -39,6 +39,8 @@ function installEntryTurbo() {
     'Executor.continueLoop': ['14vc9ei', '5c8eb1'],
     'Executor.execute': ['3b3t5q', 'ewwj1r'],
     'Executor.stepInto': ['12hzmzg', '1nkypnz'],
+    'Func.getValue': ['pcw62w', 'rcc9fz'],
+    'Func.setValue': ['ccrkob', 'kgp12m'],
     'Scope._getParamIndex': ['91a8ok', 'lohgbc'],
     'Scope.getBooleanValue': ['2dtti4', 'hs8q68'],
     'Scope.getField': ['ejrll2', 'vk79qb'],
@@ -62,8 +64,13 @@ function installEntryTurbo() {
     'block:char_at': ['1uvljqw', 'ifxaik'],
     'block:combine_something': ['12haxuu', '1pgurn0'],
     'block:continue_repeat': ['1vyfpx6', 'b1efd6'],
-    'block:func_': ['1tntz0p', 'ecqloe'],
     'block:function_create': ['1cklgt0', '1okuh48'],
+    'block:function_create_value': ['1cklgt0', '1okuh48'],
+    'block:function_general': ['1tntz0p', 'ecqloe'],
+    'block:function_param_boolean': ['tdc2qd', 'u88h6q'],
+    'block:function_param_string': ['tdc2qd', 'u88h6q'],
+    'block:function_value': ['188mhvb', 'v2nhwg'],
+    'block:get_func_variable': ['p892pl', 'u9hepo'],
     'block:get_project_timer_value': ['1rjfaed', '1vgq2m2'],
     'block:get_variable': ['1vfewif', 'tl6w5y'],
     'block:if_else': ['1mv9vxh', '7h82wl'],
@@ -78,6 +85,7 @@ function installEntryTurbo() {
     'block:repeat_inf': ['11ilb7f', '11x2z5l'],
     'block:repeat_while_true': ['1cfzz7v', '68x0ts'],
     'block:replace_string': ['52es5p', '6bg1ju'],
+    'block:set_func_variable': ['1cjp3eg', 'x8jzo3'],
     'block:set_variable': ['11waqzg', '17dg5rk'],
     'block:stop_object': ['14tmija', '1b2gex3'],
     'block:stop_repeat': ['1a2olq', '68go7o'],
@@ -112,10 +120,25 @@ function installEntryTurbo() {
     'Scope.getField': Entry.Scope.prototype.getField,
     'Scope._getParamIndex': Entry.Scope.prototype._getParamIndex,
   }
-  // blocks with an inline rule or compiled control flow; function call blocks all share one func ('func_')
-  const RULE_BLOCKS = ['when_run_button_click', 'when_scene_start', 'when_some_key_pressed', 'number', 'text', 'True', 'False', 'get_variable', 'set_variable', 'change_variable', 'calc_basic', 'quotient_and_mod', 'boolean_basic_operator', 'boolean_and_or', 'boolean_not', 'repeat_basic', 'repeat_inf', 'repeat_while_true', '_if', 'if_else', 'stop_repeat', 'continue_repeat', 'value_of_index_from_list', 'change_value_list_index', 'add_value_to_list', 'remove_value_from_list', 'length_of_list', 'combine_something', 'substring', 'length_of_string', 'char_at', 'index_of_string', 'replace_string', 'is_press_some_key', 'get_project_timer_value', 'Talebot_Move', 'function_create', 'func_', 'stop_object']
+  // blocks with an inline rule or compiled control flow. Function call and parameter blocks inherit their func from
+  // one of the FUNC_BASES and are checked under that name.
+  const RULE_BLOCKS = ['when_run_button_click', 'when_scene_start', 'when_some_key_pressed', 'number', 'text', 'True', 'False', 'get_variable', 'set_variable', 'change_variable', 'calc_basic', 'quotient_and_mod', 'boolean_basic_operator', 'boolean_and_or', 'boolean_not', 'repeat_basic', 'repeat_inf', 'repeat_while_true', '_if', 'if_else', 'stop_repeat', 'continue_repeat', 'value_of_index_from_list', 'change_value_list_index', 'add_value_to_list', 'remove_value_from_list', 'length_of_list', 'combine_something', 'substring', 'length_of_string', 'char_at', 'index_of_string', 'replace_string', 'is_press_some_key', 'get_project_timer_value', 'Talebot_Move', 'stop_object', 'function_create', 'function_create_value', 'function_general', 'function_value', 'function_param_string', 'function_param_boolean', 'get_func_variable', 'set_func_variable']
+  const RULE_SET = new Set(RULE_BLOCKS)
+  const FUNC_BASES = ['function_general', 'function_value', 'function_param_string', 'function_param_boolean']
+  function baseOf(type) {
+    const schema = Entry.block[type]
+    if (schema && schema.func) {
+      for (const base of FUNC_BASES) {
+        if (type !== base && Entry.block[base] && schema.func === Entry.block[base].func)
+          return base
+      }
+    }
+    return type
+  }
+  const funcProto = Entry.Func && Entry.Func.prototype
   const fingerprints = previous ? previous.fingerprints : {}
-  for (const [key, fn] of Object.entries({ ...CORE, 'Variable.setValue': originalSetValue })) {
+  // Func#getValue / setValue: the local-variable rules (`value || 0`, first match by id)
+  for (const [key, fn] of Object.entries({ ...CORE, 'Variable.setValue': originalSetValue, 'Func.getValue': funcProto && funcProto.getValue, 'Func.setValue': funcProto && funcProto.setValue })) {
     if (!(key in fingerprints))
       fingerprints[key] = hash(fn)
   }
@@ -128,7 +151,7 @@ function installEntryTurbo() {
   }
   // a block's rule may be used: its func is one of the checked builds
   function blockKnown(type) {
-    const key = type.startsWith('func_') ? 'block:func_' : `block:${type}`
+    const key = `block:${baseOf(type)}`
     if (!(key in fingerprints)) {
       const schema = Entry.block[type]
       if (!schema || !schema.func)
@@ -362,6 +385,13 @@ function installEntryTurbo() {
     if (r !== undefined && r !== null && r !== STATIC.PASS)
       throw new Error(`turbo: ${block.type} returned ${String(r)}`)
   }
+  // a statement that only ever answers undefined or null (SYNC_STATEMENTS): its func, with the schema as it is now
+  function callSync(block, ex, values) {
+    const scope = new FastScope(block, schemaOf(block), ex, null)
+    const r = invoke(scope, values)
+    if (r !== undefined && r !== null && r !== STATIC.PASS)
+      throw new Error(`turbo: ${block.type} returned ${String(r)}`)
+  }
   // Scope.run for a statement: a Promise among the params waits for all of them (and the func then runs only if the
   // project still runs); otherwise the func runs at once. A func-less block does nothing.
   function invoke(scope, values) {
@@ -415,28 +445,54 @@ function installEntryTurbo() {
     throw new Error(`turbo: Talebot_Move returned ${String(r)}`)
   }
 
-  // a function the compiler did not take, run the way the function block's own func does it
-  function* entryFunction(id, ex, ent) {
+  // lodash cloneDeep of a local-variable template (plain { name, value, id } objects)
+  function cloneLocals(v) {
+    try {
+      return structuredClone(v)
+    }
+    catch {
+      return JSON.parse(JSON.stringify(v))
+    }
+  }
+  // A normal function the compiler did not take, run the way function_general's own func does it: a function executor
+  // with the call's argument values and a copy of the local variables; while it does not end the caller yields, and on
+  // every resume the call's arguments are evaluated again (again()), as Entry re-runs the call block. Its parent scope
+  // is the call block's, so an error in the body points at the call.
+  // Where Entry's function returns Promises, Entry pauses the caller and goes on a frame at a time; here the caller
+  // pauses until they settle and the function goes on at the caller's next tick.
+  function* entryFunction(id, ex, ent, callBlock, values, again) {
     stats.functionFallback++
     const func = Entry.variableContainer.getFunction(id)
     const code = func.content
     const fe = code.raiseEvent('funcDef', ent)[0]
-    fe.register.params = [null]
+    const scope = new Entry.Scope(callBlock, ex)
+    scope.values = values
+    scope.funcExecutor = fe
+    fe.register.params = values
     fe.register.paramMap = func.paramMap
     fe.parentExecutor = ex
-    fe.parentScope = ex.scope
+    fe.parentScope = scope
     fe.isFuncExecutor = true
-    fe.localVariables = []
+    fe.localVariables = cloneLocals(func.localVariables)
     for (;;) {
       const { promises } = fe.execute()
       if (fe.isEnd()) {
         code.removeExecutor(fe)
         return
       }
-      if (promises && promises.length)
-        throw new Error('turbo: asynchronous function')
-      code.removeExecutor(fe)
-      yield
+      if (promises && promises.length) {
+        const w = pause(ex, Promise.all(promises), null)
+        while (!w.done)
+          yield
+        if (w.error)
+          throw w.error
+      }
+      else {
+        code.removeExecutor(fe)
+        yield
+      }
+      if (again)
+        again()
     }
   }
 
@@ -471,6 +527,7 @@ function installEntryTurbo() {
     change,
     call,
     callStatement,
+    callSync,
     invoke,
     pause,
     FastScope,
@@ -487,7 +544,10 @@ function installEntryTurbo() {
 
   // ── compiler ──
   // c: { blocks, schemas, consts, vars, lists, loops, n, fn (a function body), yields (emitted a yield point) }
-  const context = fn => ({ blocks: [], schemas: [], consts: [], vars: new Map(), lists: new Map(), loops: [], n: 0, fn, yields: false })
+  // c.fn: the function being compiled (its plan record), null at the top level of a script. sites: statement calls,
+  // left as placeholders until the call graph is solved; valueCalls: callees of value calls; scene: a scene change;
+  // arity: parameters read (a0..); locals: local variables used (L0..).
+  const context = fn => ({ blocks: [], schemas: [], consts: [], vars: new Map(), lists: new Map(), loops: [], n: 0, fn, yields: false, sites: [], valueCalls: new Set(), scene: false, arity: 0, locals: new Map() })
   const isBlock = p => p instanceof Entry.Block
   function field(b, i) {
     if (isBlock(b.params[i]))
@@ -546,7 +606,8 @@ function installEntryTurbo() {
       listRef(c, field(b, LIST_FIELD[b.type]))
   }
   // re-evaluating it has no effect and cannot throw
-  const stable = p => !isBlock(p) || ['number', 'text', 'True', 'False', 'get_variable'].includes(p.type)
+  const stable = p => !isBlock(p) || ['number', 'text', 'True', 'False', 'get_variable', 'get_func_variable'].includes(p.type)
+    || ['function_param_string', 'function_param_boolean'].includes(baseOf(p.type))
 
   // every param evaluated in order, as Scope.getParams does, for a block run through its own func
   function args(c, b) {
@@ -741,6 +802,137 @@ function installEntryTurbo() {
     'video_object_detected',
   ])
   // @classify-end
+  // Statements whose func only ever answers undefined or null (next block): they run without the yield protocol, so
+  // functions made of them stay plain JS. Same source.
+  // @sync-start
+  const SYNC_STATEMENTS = new Set([
+    'add_effect_amount',
+    'bounce_wall',
+    'brush_erase_all',
+    'brush_stamp',
+    'change_brush_transparency',
+    'change_effect_amount',
+    'change_object_index',
+    'change_opacity',
+    'change_scale_percent',
+    'change_scale_size',
+    'change_thickness',
+    'change_to_next_shape',
+    'change_to_nth_shape',
+    'change_to_some_shape',
+    'check_lecture_goal',
+    'choose_project_timer_action',
+    'close_table_chart',
+    'create_clone',
+    'delete_row_from_table',
+    'dialog',
+    'direction_absolute',
+    'direction_relative',
+    'erase_all_effects',
+    'flip_arrow_horizontal',
+    'flip_arrow_vertical',
+    'flip_x',
+    'flip_y',
+    'hidden',
+    'hidden_if_else',
+    'hidden_if_else2',
+    'hidden_loop',
+    'hidden_loop2',
+    'hide',
+    'hide_list',
+    'hide_variable',
+    'locate',
+    'locate_to_face',
+    'locate_to_hand',
+    'locate_to_pose',
+    'locate_x',
+    'locate_xy',
+    'locate_y',
+    'message_cast',
+    'move_direction',
+    'move_to_angle',
+    'move_x',
+    'move_y',
+    'open_table',
+    'open_table_chart',
+    'open_table_wait',
+    'play_bgm',
+    'read_text',
+    'register_score',
+    'remove_all_clones',
+    'remove_dialog',
+    'reset_project_timer',
+    'reset_scale_size',
+    'restart_project',
+    'rotate_absolute',
+    'rotate_by_angle',
+    'rotate_by_angle_dropdown',
+    'rotate_direction',
+    'rotate_relative',
+    'run',
+    'save_current_table',
+    'see_angle',
+    'see_angle_direction',
+    'see_angle_object',
+    'see_direction',
+    'set_brush_tranparency',
+    'set_color',
+    'set_decisiontree_option',
+    'set_effect',
+    'set_effect_amount',
+    'set_effect_volume',
+    'set_entity_effect',
+    'set_fill_color',
+    'set_kernel_option',
+    'set_logistic_regression_optimizer',
+    'set_logistic_regression_option',
+    'set_object_order',
+    'set_opacity',
+    'set_random_color',
+    'set_regression_option',
+    'set_scale_percent',
+    'set_scale_size',
+    'set_svm_option',
+    'set_thickness',
+    'set_tts_property',
+    'set_value_from_cell',
+    'set_value_from_table',
+    'set_visible_answer',
+    'set_visible_project_timer',
+    'set_visible_speech_to_text',
+    'show',
+    'show_list',
+    'show_prompt',
+    'show_variable',
+    'sound_from_to',
+    'sound_silent_all',
+    'sound_something',
+    'sound_something_second',
+    'sound_something_second_with_block',
+    'sound_something_with_block',
+    'sound_speed_change',
+    'sound_speed_set',
+    'sound_volume_change',
+    'sound_volume_set',
+    'start_drawing',
+    'start_fill',
+    'start_neighbor_scene',
+    'start_scene',
+    'stop_bgm',
+    'stop_drawing',
+    'stop_fill',
+    'stretch_scale_size',
+    'test_wrapper',
+    'text_append',
+    'text_change_bg_color',
+    'text_change_effect',
+    'text_change_font',
+    'text_change_font_color',
+    'text_flush',
+    'text_prepend',
+    'text_write',
+  ])
+  // @sync-end
   // A block without a func is fine: Entry evaluates its params and moves on (a value is then undefined).
   function generic(type, kind) {
     const key = `${kind}:${type}`
@@ -825,12 +1017,68 @@ function installEntryTurbo() {
     return null
   }
 
+  // ── parameters, local variables, value calls (ref/functions-spec.md §3-5) ──
+  // A parameter block returns the call's argument as it was evaluated, no conversion, looked up by block type in the
+  // running function's paramMap (a missing entry gives undefined).
+  function paramRead(c, p) {
+    if (!c.fn)
+      throw new Unsupported('parameter outside a function')
+    if (!blockKnown(p.type))
+      throw new Unsupported(`unchecked build: ${baseOf(p.type)}`)
+    onlyBlocksAt(p, [])
+    const i = c.fn.func.paramMap ? c.fn.func.paramMap[p.type] : undefined
+    if (!Number.isInteger(i) || i < 0)
+      return 'undefined'
+    c.arity = Math.max(c.arity, i + 1)
+    return `a${i}`
+  }
+  // a local variable: its index in the running function's template (first match by id), or -1 for another function's
+  function localIndex(c, b) {
+    if (!c.fn)
+      throw new Unsupported('local variable outside a function')
+    if (!blockKnown(b.type) || !isKnown('Func.getValue') || !isKnown('Func.setValue'))
+      throw new Unsupported(`unchecked build: ${b.type}`)
+    const id = field(b, 0)
+    if (typeof id !== 'string' || !Entry.variableContainer.getFunction(id.split('_')[0]))
+      throw new Unsupported('local variable id')
+    const list = c.fn.func.localVariables
+    if (!Array.isArray(list) || list.some(v => !v || typeof v !== 'object' || (typeof v.value === 'object' && v.value !== null)))
+      throw new Unsupported('local variable list')
+    return list.findIndex(v => v.id === id)
+  }
+  function localRef(c, i) {
+    if (!c.locals.has(i))
+      c.locals.set(i, `L${i}`)
+    return c.locals.get(i)
+  }
+  // a value call: the callee must end in one pass (never yield), else Entry answers with a Promise (solve() checks)
+  function valueCall(c, p) {
+    if (!blockKnown(p.type) || !blockKnown('function_create_value'))
+      throw new Unsupported('unchecked build: function_value')
+    const G = plan(p.type.slice(5), 'value')
+    if (G.failed)
+      throw new Unsupported(`value function: ${G.reason}`)
+    c.valueCalls.add(G)
+    return `FT.${G.name}(ex, ent${p.params.map(q => `, ${expr(c, q)}`).join('')})`
+  }
+
   function expr(c, p) {
     if (!isBlock(p))
       return literal(c, filterReserved(p))
     if (!Entry.block[p.type])
       throw new Unsupported(`unknown ${p.type}`)
-    if (options.inline && blockKnown(p.type)) {
+    const base = baseOf(p.type)
+    if (base === 'function_param_string' || base === 'function_param_boolean')
+      return paramRead(c, p)
+    if (base === 'function_value')
+      return valueCall(c, p)
+    if (p.type === 'get_func_variable') {
+      onlyBlocksAt(p, [])
+      const i = localIndex(c, p)
+      // Func#getValue: `value || 0`, and 0 for an id the running function does not have
+      return i < 0 ? '0' : `(${localRef(c, i)} || 0)`
+    }
+    if (options.inline && RULE_SET.has(p.type) && blockKnown(p.type)) {
       const code = inlineExpr(c, p)
       if (code !== null)
         return code
@@ -894,9 +1142,19 @@ function installEntryTurbo() {
     const s = (code, open = true) => ({ code, open })
     if (CONTROL.has(b.type) && !blockKnown(b.type))
       throw new Unsupported(`unchecked build: ${b.type}`)
+    // a value function must not change scenes (Entry would end the consumer's executor under it)
+    if (b.type === 'start_scene' || b.type === 'start_neighbor_scene')
+      c.scene = true
     switch (b.type) {
       case 'repeat_basic': {
         onlyBlocksAt(b, [0])
+        // a literal count that comes to 0: Entry leaves the loop at once, the body never runs and nothing yields
+        const count = b.params[0]
+        if (isBlock(count) && (count.type === 'number' || count.type === 'text') && !isBlock(count.params[0])) {
+          const v = num(filterReserved(count.params[0]))
+          if (v >= 0 && Math.floor(v) === 0)
+            return s(at)
+        }
         const value = expr(c, b.params[0])
         // Entry evaluates the count again each time it re-enters the loop block; skip that when it cannot matter
         const reEntry = stable(b.params[0]) ? '' : `$b = ${k};\n${value};\n`
@@ -928,18 +1186,24 @@ function installEntryTurbo() {
         const no = branch(c, b, 1)
         return s(`${at}if (bool(${cond})) {\n${yes.code}} else {\n${no.code}}\n`, yes.open || no.open)
       }
+      // Outside any loop of a normal function the stack unwinds to the definition block: stop_repeat returns from the
+      // function, continue_repeat yields once and then returns. At the top level and in value functions: not compiled.
       case 'stop_repeat': {
         const loop = c.loops.at(-1)
-        if (!loop)
-          throw new Unsupported('stop_repeat outside a loop')
-        return s(`break ${loop.label};\n`, false)
+        if (loop)
+          return s(`break ${loop.label};\n`, false)
+        if (c.fn && c.fn.kind === 'normal')
+          return s('return;\n', false)
+        throw new Unsupported('stop_repeat outside a loop')
       }
       case 'continue_repeat': {
         const loop = c.loops.at(-1)
-        if (!loop)
-          throw new Unsupported('continue_repeat outside a loop')
         c.yields = true
-        return s(`yield;\n${loop.reEntry}continue ${loop.label};\n`, false)
+        if (loop)
+          return s(`yield;\n${loop.reEntry}continue ${loop.label};\n`, false)
+        if (c.fn && c.fn.kind === 'normal')
+          return s('yield;\nreturn;\n', false)
+        throw new Unsupported('continue_repeat outside a loop')
       }
       case 'Talebot_Move': {
         const slot = b.params[1]
@@ -953,19 +1217,25 @@ function installEntryTurbo() {
         return s(`${at}if (!weld(B[${k}], S[${k}], ex, ${literal(c, field(b, 0))})) break ${loop.label};\n${loop.reEntry}continue ${loop.label};\n`, false)
       }
     }
-    if (b.type.startsWith('func_')) {
-      onlyBlocksAt(b, [])
+    if (baseOf(b.type) === 'function_general') {
+      // every param in order, the trailing Indicator too (a stale paramMap index may point at it); on each resume of a
+      // yielding callee Entry evaluates them again and drops the results
       const id = b.type.slice(5)
-      const f = options.functions && blockKnown(b.type) && blockKnown('function_create') ? compileFunction(id) : null
-      if (!f) {
-        c.yields = true
-        return s(`${at}yield* entryFunction(${JSON.stringify(id)}, ex, ent);\n${after}`)
-      }
-      if (f.gen)
-        c.yields = true
-      return s(`${at}${f.gen ? 'yield* ' : ''}FT.${f.name}(ex, ent);\n${after}`)
+      const argCodes = b.params.map(p => expr(c, p))
+      const again = b.params.map((p, i) => (isBlock(p) && !stable(p) ? `${argCodes[i]};\n` : '')).join('')
+      const G = options.functions && blockKnown(b.type) && blockKnown('function_create') ? plan(id, 'normal') : null
+      c.sites.push({ G, id, k, args: argCodes, again, after })
+      return s(`${at}\u0001${c.sites.length - 1}\u0001`)
     }
-    if (options.inline && blockKnown(b.type)) {
+    if (b.type === 'set_func_variable') {
+      onlyBlocksAt(b, [1])
+      const value = expr(c, b.params[1])
+      const i = localIndex(c, b)
+      if (i < 0)
+        throw new Unsupported('local variable of another function') // Entry: TypeError
+      return s(`${at}${localRef(c, i)} = ${value};\n`)
+    }
+    if (options.inline && RULE_SET.has(b.type) && blockKnown(b.type)) {
       const e = q => expr(c, b.params[q])
       switch (b.type) {
         case 'set_variable':
@@ -990,6 +1260,8 @@ function installEntryTurbo() {
     }
     if (TIER1_STATEMENTS.has(b.type))
       return s(`${at}callStatement(B[${k}], S[${k}], ex, ${args(c, b)});\n${after}`)
+    if (SYNC_STATEMENTS.has(b.type) && generic(b.type, 'statement'))
+      return s(`${at}callSync(B[${k}], ex, ${args(c, b)});\n${after}`)
     // stop_object reads this.executor only for "otherThread", to spare itself; inside a function Entry's executor is
     // the function's own, so that case would differ there. Everything else it does is die() and clearing executors.
     const stopObject = b.type === 'stop_object' && blockKnown(b.type) && !(c.fn && field(b, 0) === 'otherThread')
@@ -1015,16 +1287,160 @@ function installEntryTurbo() {
     + `if (e && typeof e === 'object' && !e.$turboBlock) e.$turboBlock = B[$b];\nthrow e;\n}\n`
   const guardOf = (name, kind) => (kind === 'list' ? `!${name} || ${name}.isRealTime_ || ${name}.isCloud_` : `!${name} || ${name}.isRealTime_`)
 
+  // ── statement calls ──
+  // Once its callee is solved, a call site becomes: a plain call when the callee never yields; `yield*` when it yields
+  // and evaluating the arguments again cannot matter; otherwise a loop that yields and evaluates the arguments again
+  // before each resume, as Entry does; entryFunction when the callee is not compiled.
+  function renderCall(site) {
+    const { G, id, k, args: list, again, after } = site
+    const a = list.length ? `, ${list.join(', ')}` : ''
+    if (!G || G.failed)
+      return `yield* entryFunction(${JSON.stringify(id)}, ex, ent, B[${k}], [${list.join(', ')}]${again ? `, () => {\n${again}}` : ''});\n${after}`
+    if (!G.gen)
+      return `FT.${G.name}(ex, ent${a});\n${after}`
+    if (!again)
+      return `yield* FT.${G.name}(ex, ent${a});\n${after}`
+    return `{\nconst g = FT.${G.name}(ex, ent${a});\nwhile (!g.next().done) {\nyield;\n${again}}\n}\n${after}`
+  }
+  // eslint-disable-next-line no-control-regex -- the placeholder statement() leaves for a call site
+  const render = (c, code) => code.replace(/\u0001(\d+)\u0001/g, (_, i) => renderCall(c.sites[Number(i)]))
+
+  // ── functions: plan, solve, link (ref/functions-spec.md §9.2) ──
+  // plan() compiles a function's body once, its statement calls left as placeholders, and records what it needs.
+  // solve() decides over the whole call graph which functions can yield, so recursion that never yields stays plain JS
+  // recursion, and fails what Entry would run through Promises (a value call whose callee yields). link() writes the
+  // call sites and builds each function: FT[name](ex, ent, a0, a1, ...).
+  const FIELD_BLOCKS = new Set(['function_field_label', 'function_field_string', 'function_field_boolean'])
+  // the definition's field chain: evaluated by Entry on every run of the definition, harmless only if it is all fields
+  function fieldsOnly(p) {
+    if (!isBlock(p))
+      return true
+    const base = baseOf(p.type)
+    if (!FIELD_BLOCKS.has(p.type) && base !== 'function_param_string' && base !== 'function_param_boolean')
+      return false
+    return p.params.every(fieldsOnly)
+  }
+  function plan(id, kind) {
+    let F = fns.get(id)
+    if (F)
+      return F // planned, being planned (a cycle: nothing about it is needed yet) or linked
+    F = { id, kind, name: `f${fns.size}`, planning: true, failed: false, reason: '', linked: false, gen: false, scene: false, localYields: false, func: null, c: null, code: '', decl: '', objs: [], templates: [] }
+    fns.set(id, F)
+    try {
+      const func = Entry.variableContainer.getFunction(id)
+      if (!func || !func.content)
+        throw new Unsupported('missing function')
+      F.func = func
+      const defType = kind === 'value' ? 'function_create_value' : 'function_create'
+      const def = func.content.getEventMap('funcDef')?.[0]
+      const pointer = def && def.pointer()
+      if (!def || def.type !== defType || !blockKnown(defType) || pointer.length !== 4 || pointer[3] !== 0)
+        throw new Unsupported('function definition')
+      if (!fieldsOnly(def.params[0]))
+        throw new Unsupported('function fields')
+      const c = context(F)
+      F.c = c
+      const first = firstOf(def, 0)
+      if (kind === 'value') {
+        if (!first)
+          throw new Unsupported('empty value function') // Entry answers with a Promise
+        // the body, then VALUE, evaluated after it: it sees the final locals
+        F.code = `${chain(c, first).code}return ${expr(c, def.params[3])};\n`
+      }
+      else if (first) {
+        F.code = chain(c, first).code
+      }
+      else {
+        c.yields = true // function_create steps into an empty thread: one yield
+        F.code = 'yield;\n'
+      }
+      F.localYields = c.yields
+      F.scene = c.scene
+      // global variables and lists only, resolved once
+      for (const [what, map] of [['variable', c.vars], ['list', c.lists]]) {
+        for (const [vid, name] of map) {
+          const o = what === 'list' ? Entry.variableContainer.getList(vid) : Entry.variableContainer.getVariable(vid)
+          if (!o || o.isRealTime_ || o.isCloud_ || o.object_)
+            throw new Unsupported(`function uses a ${what} that is local, real-time or missing`)
+          F.decl += `const ${name} = V[${F.objs.length}];\n`
+          F.objs.push(o)
+        }
+      }
+      // each call starts its locals from the template's values (Entry deep-copies the template per call)
+      F.templates = func.localVariables || []
+    }
+    catch (e) {
+      F.failed = true
+      F.reason = e instanceof Unsupported ? e.message : `error: ${e.message}`
+      note(`function: ${F.reason}`)
+      if (!(e instanceof Unsupported))
+        console.error('[turbo] function failed to compile', e)
+    }
+    F.planning = false
+    return F
+  }
+  // monotone: gen, scene and failed only ever turn true
+  function solve() {
+    for (let changed = true; changed;) {
+      changed = false
+      for (const F of fns.values()) {
+        if (F.linked || F.failed || F.planning)
+          continue
+        const sites = F.c.sites
+        const gen = F.localYields || sites.some(s => !s.G || s.G.failed || s.G.gen)
+        const scene = F.scene || sites.some(s => !s.G || s.G.failed || s.G.scene)
+        let reason = null
+        if (F.kind === 'value' && gen)
+          reason = 'value function that yields'
+        else if (F.kind === 'value' && scene)
+          reason = 'value function that changes scene'
+        else if ([...F.c.valueCalls].some(G => G.failed || G.gen))
+          reason = 'value call to a function that yields'
+        if (reason) {
+          F.failed = true
+          F.reason = reason
+          note(`function: ${reason}`)
+          changed = true
+        }
+        else if (gen !== F.gen || scene !== F.scene) {
+          F.gen = gen
+          F.scene = scene
+          changed = true
+        }
+      }
+    }
+  }
+  function link() {
+    for (const F of fns.values()) {
+      if (F.linked || F.failed || F.planning)
+        continue
+      const c = F.c
+      const params = Array.from({ length: c.arity }, (_, i) => `, a${i}`).join('')
+      const locals = [...c.locals].map(([i, name]) => `let ${name} = T[${i}].value;\n`).join('')
+      const src = `const { ${RUNTIME_NAMES} } = R;\n${F.decl}return function${F.gen ? '*' : ''} (ex, ent${params}) {\nlet $b = -1;\n${locals}${render(c, F.code)}};\n`
+      // eslint-disable-next-line no-new-func -- the whole point: blocks become JS
+      FT[F.name] = new Function('R', 'B', 'S', 'K', 'FT', 'V', 'T', src)(R, c.blocks, c.schemas, c.consts, FT, F.objs, F.templates)
+      F.linked = true
+      stats.functions++
+      if (F.gen)
+        stats.generators++
+    }
+  }
+
   // a top-level script: a factory (executor, entity) -> generator, resolving variables and lists for that entity
   function generate(hat) {
-    const c = context(false)
+    const c = context(null)
     const body = chain(c, hat.getNextBlock()).code
+    solve()
+    if ([...c.valueCalls].some(G => G.failed || G.gen))
+      throw new Unsupported('value call to a function that yields')
+    link()
     const refs = [...[...c.vars].map(([id, name]) => [id, name, 'variable']), ...[...c.lists].map(([id, name]) => [id, name, 'list'])]
     const decl = refs.map(([id, name, kind]) => `const ${name} = ${kind}(${JSON.stringify(id)}, ent);\n`).join('')
     const guards = refs.map(([, name, kind]) => guardOf(name, kind))
     const src = `const { ${RUNTIME_NAMES} } = R;\nreturn function (ex, ent) {\n${decl}`
       + `${guards.length ? `if (${guards.join(' || ')}) return null;\n` : ''}`
-      + `return (function* () {\n${errorWrap(body)}})();\n};\n`
+      + `return (function* () {\n${errorWrap(render(c, body))}})();\n};\n`
     return { src, c }
   }
 
@@ -1043,70 +1459,6 @@ function installEntryTurbo() {
         console.error('[turbo] compile failed', e)
       return null
     }
-  }
-
-  // A function becomes FT[name]: a plain JS function, or a generator when it can yield (a loop end, an empty body or
-  // branch, a call that yields, or it takes part in a cycle of calls). Its variables and lists must be global, so they
-  // resolve once. Returns { name, gen } or null (then callers use entryFunction).
-  function compileFunction(id) {
-    let f = fns.get(id)
-    if (f) {
-      if (f.pending) {
-        f.forceGen = true // a call cycle: every member becomes a generator, the caller uses yield*
-        return { name: f.name, gen: true }
-      }
-      return f.failed ? null : f
-    }
-    f = { name: `f${fns.size}`, pending: true, forceGen: false, gen: false, failed: false }
-    fns.set(id, f)
-    try {
-      const func = Entry.variableContainer.getFunction(id)
-      if (!func || func.type !== 'normal')
-        throw new Unsupported('function type')
-      if ((func.localVariables && func.localVariables.length) || Object.keys(func.paramMap || {}).length)
-        throw new Unsupported('function with parameters or local variables')
-      const def = func.content.getEventMap('funcDef')[0]
-      const c = context(true)
-      const first = def && firstOf(def, 0)
-      let body
-      if (first) {
-        body = chain(c, first).code
-      }
-      else {
-        c.yields = true // function_create steps into an empty thread: one yield
-        body = 'yield;\n'
-      }
-      const objs = []
-      const decl = []
-      for (const [kind, map] of [['variable', c.vars], ['list', c.lists]]) {
-        for (const [vid, name] of map) {
-          const o = kind === 'list' ? Entry.variableContainer.getList(vid) : Entry.variableContainer.getVariable(vid)
-          if (!o || o.isRealTime_ || o.isCloud_ || o.object_)
-            throw new Unsupported(`function uses a ${kind} that is local, real-time or missing`)
-          decl.push(`const ${name} = V[${objs.length}];\n`)
-          objs.push(o)
-        }
-      }
-      f.gen = c.yields || f.forceGen
-      const src = `const { ${RUNTIME_NAMES} } = R;\n${decl.join('')}return function${f.gen ? '*' : ''} (ex, ent) {\nlet $b = -1;\n${body}};\n`
-      // eslint-disable-next-line no-new-func -- the whole point: blocks become JS
-      FT[f.name] = new Function('R', 'B', 'S', 'K', 'FT', 'V', src)(R, c.blocks, c.schemas, c.consts, FT, objs)
-      stats.functions++
-      if (f.gen)
-        stats.generators++
-    }
-    catch (e) {
-      if (!(e instanceof Unsupported))
-        console.error('[turbo] function compile failed', e)
-      note(`function: ${e instanceof Unsupported ? e.message : `error: ${e.message}`}`)
-      f.failed = true
-      // a caller in the same cycle may already have emitted `yield* FT[name]`
-      FT[f.name] = function* (ex, ent) {
-        yield* entryFunction(id, ex, ent)
-      }
-    }
-    f.pending = false
-    return f.failed ? null : f
   }
 
   // a start block the compiler takes; the others are noted once each (the popup lists them)
@@ -1259,11 +1611,8 @@ function installEntryTurbo() {
     },
     // every fingerprint this build has for the checked set (bench/fingerprints.js collects them into KNOWN)
     collectFingerprints() {
-      for (const type of RULE_BLOCKS) {
-        const t = type === 'func_' ? Object.keys(Entry.block).find(k => k.startsWith('func_')) : type
-        if (t)
-          blockKnown(t)
-      }
+      for (const type of RULE_BLOCKS)
+        blockKnown(type)
       return { ...fingerprints }
     },
     // compile every script of the loaded project now (normally that happens as each one first runs)
