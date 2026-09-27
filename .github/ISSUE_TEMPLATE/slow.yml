@@ -1,0 +1,32 @@
+name: 빨라지지 않아요
+description: 터보를 켜도 작품이 빨라지지 않아요 (원래 방식으로 도는 블록이 있어요)
+labels: [enhancement]
+body:
+  - type: input
+    id: project
+    attributes:
+      label: 작품 링크
+      placeholder: https://playentry.org/project/...
+    validations:
+      required: true
+  - type: textarea
+    id: reasons
+    attributes:
+      label: 팝업의 "원래 방식으로 도는 이유"
+      description: 작품을 한 번 실행한 뒤 확장 아이콘을 누르면 나오는 목록을 그대로 옮겨 주세요
+      placeholder: |
+        예)
+        ai_boolean_and 2
+        시작 블록 when_hand_detection 1
+    validations:
+      required: true
+  - type: textarea
+    id: osd
+    attributes:
+      label: 속도계(OSD) 값 (있으면)
+      description: 무대 왼쪽 위의 FPS, SCRIPT, JIT 값이나 캡처
+  - type: input
+    id: version
+    attributes:
+      label: 확장 버전
+      placeholder: v0.1.0

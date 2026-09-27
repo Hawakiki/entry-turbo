@@ -12,7 +12,8 @@ pnpm release       # dist/ → release/entry-turbo-v<버전>.zip + .sha256 (같�
 크롬에 넣기(배포 없이): `chrome://extensions` → 개발자 모드 → "압축해제된 확장 프로그램을 로드합니다" → `dist/`.
 코드를 고치면 `pnpm build` → 확장 카드의 새로고침 → 작품 탭 새로고침.
 
-릴리스: `manifest.json` 의 `version` 을 올리고 `pnpm release` → GitHub 릴리스 태그 `v<버전>` 에 zip 과 해시를 올린다.
+릴리스: `manifest.json` 의 `version` 을 올려 커밋 → `git tag v<버전>` 푸시 → Actions(`release.yml`)가 zip·해시를 만들어 출처 증명과 함께
+**초안** 릴리스에 붙인다 → 설명을 쓰고 게시. 푸시·PR 마다 `ci.yml` 이 린트와 빌드를 돌린다.
 팝업은 열릴 때 GitHub API 로 최신 릴리스 번호를 확인해 새 버전을 알린다(6시간마다 한 번). `manifest.json` 의 `key` 는
 확장 ID 를 고정한다(어느 폴더에 풀어도 같은 확장).
 

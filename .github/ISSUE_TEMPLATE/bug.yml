@@ -1,0 +1,57 @@
+name: 작품이 다르게 돌아가요
+description: 터보를 켜면 작품이 원래와 다르게 움직이거나, 멈추거나, 오류가 나요
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        알려 주셔서 고맙습니다. 아래를 채워 주시면 원인을 찾기 쉬워요.
+  - type: input
+    id: project
+    attributes:
+      label: 작품 링크
+      description: 문제가 생기는 엔트리 작품 주소
+      placeholder: https://playentry.org/project/...
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 무엇이 달라요?
+      description: 원래는 어떻게 되는데, 터보를 켜면 어떻게 되는지 적어 주세요
+      placeholder: 예) 원래는 점수가 올라가는데, 터보를 켜면 0에서 멈춰요
+    validations:
+      required: true
+  - type: dropdown
+    id: switches
+    attributes:
+      label: 팝업에서 스위치를 하나씩 꺼 봤나요?
+      description: 확장 아이콘을 누르면 나오는 창에서 끄고, 작품을 멈췄다가 다시 시작해 보세요
+      options:
+        - 아직 안 해 봤어요
+        - '"블록을 JS로 컴파일"을 끄면 괜찮아져요'
+        - '"변수 표시 갱신 모으기"를 끄면 괜찮아져요'
+        - 둘 다 꺼도 이상해요
+        - '"켜기"를 끄면 괜찮아져요'
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 확장 버전
+      description: 팝업 제목 옆에 있어요
+      placeholder: v0.1.0
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 브라우저
+      options:
+        - 크롬
+        - 웨일
+        - 엣지
+        - 기타
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: 화면 캡처나 오류 메시지 (있으면)
+      description: 이미지를 여기에 붙여 넣을 수 있어요

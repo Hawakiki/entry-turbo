@@ -1,0 +1,38 @@
+# Push a tag v<version> (the version in manifest.json): GitHub builds the zip and its SHA-256, attests where they came
+# from, and attaches them to a DRAFT release. Write the notes, then publish it; the popup's update check only sees
+# published releases.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - name: The tag matches manifest.json
+        run: test "v$(node -p "require('./manifest.json').version")" = "$GITHUB_REF_NAME"
+      - run: pnpm release
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/*.zip
+      - name: Draft release with the zip and its hash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/*.zip release/*.sha256 --draft --title "$GITHUB_REF_NAME" --generate-notes
