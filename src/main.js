@@ -1,16 +1,20 @@
-/* global Entry, installEntryTurbo */
-// Extension, page side (MAIN world, every playentry.org frame). Waits for Entry in this frame, installs the compiler,
-// follows the popup's settings (through bridge.js) and answers status requests.
-// Settings change only while the project is stopped: switching the executor mid-run would restart compiled scripts.
+/* global Entry, installEntryTurbo, installEntryOsd */
+// Extension, page side (MAIN world, every playentry.org frame). Waits for Entry in this frame, installs the compiler
+// and the on-screen display, follows the popup's settings (through bridge.js) and answers status requests.
+// Compiler settings change only while the project is stopped: switching the executor mid-run would restart compiled
+// scripts. The display switches at once.
 (() => {
   const PAGE = 'entry-turbo-page'
   const BRIDGE = 'entry-turbo-bridge'
   let turbo = null
-  let wanted = { enabled: true, compile: true, deferViews: true }
+  let osd = null
+  let wanted = { enabled: true, compile: true, deferViews: true, osd: true }
   let applied = null
 
-  const key = () => JSON.stringify(wanted)
+  const key = () => JSON.stringify([wanted.enabled, wanted.compile, wanted.deferViews])
   function apply() {
+    if (osd)
+      osd.show(Boolean(wanted.osd))
     if (!turbo || Entry.engine.state !== 'stop' || key() === applied)
       return
     if (wanted.enabled)
@@ -73,6 +77,7 @@
     }
     clearInterval(wait)
     turbo = installEntryTurbo()
+    osd = installEntryOsd()
     hookRun()
     window.postMessage({ source: PAGE, type: 'ready' }, '*')
     apply()

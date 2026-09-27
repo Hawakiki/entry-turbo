@@ -3,7 +3,7 @@
 (() => {
   const PAGE = 'entry-turbo-page'
   const BRIDGE = 'entry-turbo-bridge'
-  const DEFAULTS = { enabled: true, compile: true, deferViews: true }
+  const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true }
   const waiting = new Map()
   let pageReady = false
 

@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": ["https://playentry.org/*"],
-      "js": ["src/turbo.js", "src/main.js"],
+      "js": ["src/turbo.js", "src/osd.js", "src/main.js"],
       "world": "MAIN",
       "all_frames": true,
       "run_at": "document_start"

@@ -1,6 +1,6 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
-const DEFAULTS = { enabled: true, compile: true, deferViews: true }
+const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true }
 const KEYS = Object.keys(DEFAULTS)
 const $ = id => document.getElementById(id)
 
