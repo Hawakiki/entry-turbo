@@ -346,12 +346,16 @@ function installEntryTurbo() {
   FastScope.prototype = Object.create(Entry.Scope.prototype)
   // a value block's own func; only blocks that answer synchronously are compiled
   function call(block, schema, ex, values) {
+    if (!schema.func)
+      return undefined
     const scope = new FastScope(block, schema, ex, values)
     const r = schema.func.call(scope, ex.entity, scope)
     if (r instanceof Promise)
       throw new Error(`turbo: ${block.type} answered asynchronously`)
     return r
   }
+  // the block's schema as it is now: AI and expansion modules replace theirs when they load
+  const schemaOf = block => Entry.block[block.type]
   function callStatement(block, schema, ex, values) {
     const scope = new FastScope(block, schema, ex, values)
     const r = schema.func.call(scope, ex.entity, scope)
@@ -361,7 +365,7 @@ function installEntryTurbo() {
   // Scope.run for a statement: a Promise among the params waits for all of them (and the func then runs only if the
   // project still runs); otherwise the func runs at once. A func-less block does nothing.
   function invoke(scope, values) {
-    const func = scope._schema.func
+    const func = scope._schema && scope._schema.func
     if (!func)
       return undefined
     if (values.some(v => v instanceof Promise)) {
@@ -383,7 +387,8 @@ function installEntryTurbo() {
     ex.paused = true
     promise.then((v) => {
       ex.paused = false
-      w.again = v === STATIC.CONTINUE || v === scope
+      // Entry moves on only while the engine runs
+      w.again = v === STATIC.CONTINUE || v === scope || !Entry.engine.isState('run')
       w.done = true
     }, (e) => {
       ex.paused = false
@@ -469,6 +474,7 @@ function installEntryTurbo() {
     invoke,
     pause,
     FastScope,
+    schemaOf,
     PASS: STATIC.PASS,
     BREAK: STATIC.BREAK,
     weld,
@@ -554,12 +560,194 @@ function installEntryTurbo() {
   const EXECUTOR_TOUCH = /\bexecutor\b|getStatement|stepInto|_callStack|isLooped|iterCount|isCondition|\.register\b|localVariables|parentExecutor|funcExecutor|funcCode|\.key\b/
   const ASYNC_HINT = /Promise|\basync\b|\bawait\b|\.then\(|regenerator|asyncToGenerator/
   const genericCache = new Map()
+  // Blocks never taken generically whatever their source looks like: the ones that need a rule, and the value blocks
+  // that can answer with a Promise (some look synchronous in the minified code). From ref/classify.json, a reading of
+  // every non-hardware block of the web build 2026-09-27.
+  // @classify-start
+  const NOT_GENERIC = new Set([
+    '_if',
+    'ai_boolean_and',
+    'ai_boolean_distance',
+    'ai_if_else',
+    'ai_if_else_1',
+    'ai_repeat_until_reach',
+    'check_block_execution',
+    'check_city_finedust',
+    'check_city_weather',
+    'check_connected_camera',
+    'check_cur_finddust',
+    'check_cur_weather',
+    'check_day_weather',
+    'check_disaster_alert',
+    'check_finedust',
+    'check_language',
+    'check_microphone',
+    'check_object_property',
+    'check_time_weather',
+    'check_weather',
+    'continue_repeat',
+    'count_disaster_alert',
+    'count_disaster_behavior',
+    'count_disaster_guideline',
+    'count_festival',
+    'count_lifeSafety_behavior',
+    'count_safety_accident_guideline',
+    'count_social_disaster_guideline',
+    'ebs_if',
+    'ebs_if2',
+    'function_create',
+    'function_create_value',
+    'function_general',
+    'function_param_boolean',
+    'function_param_string',
+    'function_value',
+    'get_block_count',
+    'get_city_weather_data',
+    'get_cluster_centriod_index_1',
+    'get_cluster_centriod_index_2',
+    'get_cluster_centriod_index_3',
+    'get_cluster_centriod_index_4',
+    'get_cluster_centriod_index_5',
+    'get_cluster_centriod_index_6',
+    'get_cur_weather',
+    'get_cur_weather_data',
+    'get_cur_wind',
+    'get_current_city_weather_data',
+    'get_current_weather_data',
+    'get_day_weather',
+    'get_day_weather_data',
+    'get_disaster_alert',
+    'get_disaster_behavior',
+    'get_disaster_guideline',
+    'get_festival_info',
+    'get_func_variable',
+    'get_lifeSafety_behavior',
+    'get_logistic_regression_probability_1',
+    'get_logistic_regression_probability_2',
+    'get_logistic_regression_probability_3',
+    'get_logistic_regression_probability_4',
+    'get_logistic_regression_probability_5',
+    'get_logistic_regression_probability_6',
+    'get_microphone_volume',
+    'get_number_learning_predict_1',
+    'get_number_learning_predict_2',
+    'get_number_learning_predict_3',
+    'get_number_learning_predict_4',
+    'get_number_learning_predict_5',
+    'get_number_learning_predict_6',
+    'get_number_learning_predict_param_1',
+    'get_number_learning_predict_param_2',
+    'get_number_learning_predict_param_3',
+    'get_number_learning_predict_param_4',
+    'get_number_learning_predict_param_5',
+    'get_number_learning_predict_param_6',
+    'get_predict_1',
+    'get_predict_2',
+    'get_predict_3',
+    'get_predict_4',
+    'get_predict_5',
+    'get_predict_6',
+    'get_regression_accuracy',
+    'get_regression_predict_1',
+    'get_regression_predict_2',
+    'get_regression_predict_3',
+    'get_regression_predict_4',
+    'get_regression_predict_5',
+    'get_regression_predict_6',
+    'get_result_info',
+    'get_safety_accident_guideline',
+    'get_social_disaster_guideline',
+    'get_time_weather',
+    'get_time_weather_data',
+    'get_today_city_temperature',
+    'get_today_temperature',
+    'get_translated_string',
+    'get_weather_data',
+    'if_else',
+    'is_number_learning_group_1',
+    'is_number_learning_group_2',
+    'is_number_learning_group_3',
+    'is_number_learning_group_4',
+    'is_number_learning_group_5',
+    'is_number_learning_group_6',
+    'is_result_1',
+    'is_result_2',
+    'is_result_3',
+    'is_result_4',
+    'is_result_5',
+    'is_result_6',
+    'jr_if_construction',
+    'jr_if_speed',
+    'jr_repeat',
+    'jr_repeat_until_dest',
+    'maze_attack_both_side',
+    'maze_attack_pepe',
+    'maze_attack_peti',
+    'maze_attack_yeti',
+    'maze_call_function',
+    'maze_define_function',
+    'maze_repeat_until_1',
+    'maze_repeat_until_10',
+    'maze_repeat_until_11',
+    'maze_repeat_until_12',
+    'maze_repeat_until_13',
+    'maze_repeat_until_14',
+    'maze_repeat_until_15',
+    'maze_repeat_until_2',
+    'maze_repeat_until_3',
+    'maze_repeat_until_4',
+    'maze_repeat_until_5',
+    'maze_repeat_until_6',
+    'maze_repeat_until_7',
+    'maze_repeat_until_8',
+    'maze_repeat_until_9',
+    'maze_repeat_until_beat_monster',
+    'maze_repeat_until_goal',
+    'maze_step_for',
+    'maze_step_if_1',
+    'maze_step_if_2',
+    'maze_step_if_3',
+    'maze_step_if_4',
+    'maze_step_if_5',
+    'maze_step_if_6',
+    'maze_step_if_7',
+    'maze_step_if_8',
+    'maze_step_if_else',
+    'maze_step_if_else_ladder',
+    'maze_step_if_else_lupin',
+    'maze_step_if_else_mushroom',
+    'maze_step_if_else_road',
+    'maze_step_if_left_monster',
+    'maze_step_if_lupin',
+    'maze_step_if_mushroom',
+    'maze_step_if_right_monster',
+    'maze_step_if_yeti',
+    'maze_turn_left',
+    'maze_turn_right',
+    'media_pipe_motion_value',
+    'repeat_basic',
+    'repeat_inf',
+    'repeat_while_true',
+    'set_func_variable',
+    'stop_object',
+    'stop_repeat',
+    'switch_scope',
+    'video_body_part_coord',
+    'video_detected_face_info',
+    'video_face_part_coord',
+    'video_is_model_loaded',
+    'video_motion_value',
+    'video_number_detect',
+    'video_object_detected',
+  ])
+  // @classify-end
+  // A block without a func is fine: Entry evaluates its params and moves on (a value is then undefined).
   function generic(type, kind) {
     const key = `${kind}:${type}`
     if (!genericCache.has(key)) {
       const schema = Entry.block[type]
-      let ok = Boolean(schema && typeof schema.func === 'function' && !schema.statementsKeyMap && !(schema.statements && schema.statements.length))
-      if (ok) {
+      let ok = Boolean(schema) && !NOT_GENERIC.has(type) && !schema.statementsKeyMap && !(schema.statements && schema.statements.length)
+      if (ok && schema.func) {
         const src = String(schema.func)
         ok = !EXECUTOR_TOUCH.test(src) && (kind === 'statement' || !ASYNC_HINT.test(src))
       }
@@ -651,7 +839,7 @@ function installEntryTurbo() {
       throw new Unsupported(p.type)
     const a = args(c, p)
     const k = ref(c, p)
-    return `call(B[${k}], S[${k}], ex, ${a})`
+    return TIER1_VALUES.has(p.type) ? `call(B[${k}], S[${k}], ex, ${a})` : `call(B[${k}], schemaOf(B[${k}]), ex, ${a})`
   }
 
   // statements return { code, open }: open = control can reach the next statement
@@ -808,13 +996,14 @@ function installEntryTurbo() {
     if (!stopObject && !generic(b.type, 'statement'))
       throw new Unsupported(b.type)
     // Executor.execute's handling of a block's result, for one execution of this statement: the params are evaluated
-    // again on every run, like Scope.run; die() (the scope loses its block) ends the script, or the function
+    // again on every run, like Scope.run; a thrown AsyncError is a BREAK (yield, run again); die() (the scope loses its
+    // block) ends the script, or the function
     c.yields = true
     const a = args(c, b)
     const sc = `s${n}`
     const r = `r${n}`
-    return s(`${at}{\nconst ${sc} = new FastScope(B[${k}], S[${k}], ex, null);\nfor (;;) {\n`
-      + `const ${r} = invoke(${sc}, ${a});\n`
+    return s(`${at}{\nconst ${sc} = new FastScope(B[${k}], schemaOf(B[${k}]), ex, null);\nfor (;;) {\nlet ${r};\n`
+      + `try {\n${r} = invoke(${sc}, ${a});\n} catch (e) {\nif (e && e.name === 'AsyncError') { yield; continue; }\nthrow e;\n}\n`
       + `if (${sc}.block === null) return;\n`
       + `if (${r} === undefined || ${r} === null || ${r} === PASS) break;\n`
       + `if (${r} === ${sc} || ${r} === BREAK) { yield; continue; }\n`
