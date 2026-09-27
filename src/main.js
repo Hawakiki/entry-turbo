@@ -3,12 +3,32 @@
 // and the on-screen display, follows the popup's settings (through bridge.js) and answers status requests.
 // Compiler settings change only while the project is stopped: switching the executor mid-run would restart compiled
 // scripts. The display switches at once.
+
+/**
+ * The answer to the popup's status request (popup/popup.js renders it). Only `installed` is there before Entry is.
+ * @typedef {object} TurboStatus
+ * @property {boolean} installed The compiler is installed in this frame.
+ * @property {string} [url] This frame's address.
+ * @property {string} [type] Entry.type: 'workspace', 'minimize' (player) ...
+ * @property {'run' | 'pause' | 'stop'} [state] Entry.engine.state.
+ * @property {boolean} [boost] Entry.isTurbo (the site's boost mode).
+ * @property {boolean} [compiling] Compiled scripts are running (EntryTurbo.compiling).
+ * @property {boolean} [deferring] Variable views are deferred (EntryTurbo.deferring).
+ * @property {{on: boolean, supported: boolean} | null} [smooth] Smooth drawing; null when smooth.js is missing.
+ * @property {TurboSettings} [wanted] The switches as last received from bridge.js.
+ * @property {boolean} [pending] Compiler switches changed and wait for the project to stop.
+ * @property {TurboEngine} [engine] What an unchecked build switched off (src/turbo.js).
+ * @property {TurboStats} [stats] Counts since the last run from stop (src/turbo.js).
+ */
+
 (() => {
   const PAGE = 'entry-turbo-page'
   const BRIDGE = 'entry-turbo-bridge'
   let turbo = null
   let osd = null
+  /** @type {EntrySmooth | null} (src/smooth.js) */
   let smooth = null
+  /** @type {TurboSettings} (src/bridge.js) */
   let wanted = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
   let applied = null
 
@@ -40,6 +60,7 @@
     }
   }
 
+  /** @returns {TurboStatus} what the popup shows for this frame */
   function status() {
     if (!turbo)
       return { installed: false }

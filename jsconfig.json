@@ -1,0 +1,11 @@
+{
+  // Editor only (nothing is type-checked or built from this): puts the page scripts and the popup in one project so
+  // the JSDoc typedefs shared between them (TurboSettings, TurboStatus, ...) resolve across files.
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "types": [],
+    "checkJs": false
+  },
+  "include": ["src/**/*.js", "popup/**/*.js"]
+}

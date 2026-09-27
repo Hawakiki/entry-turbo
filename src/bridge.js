@@ -1,8 +1,20 @@
 // Extension, isolated side (every playentry.org frame). Carries the settings from chrome.storage to the page script
 // and its status back to the popup. Frames without Entry never answer, so the popup hears from the one that has it.
+
+/**
+ * The popup's switches as kept in chrome.storage.local; popup/popup.js and src/main.js hold the same defaults.
+ * @typedef {object} TurboSettings
+ * @property {boolean} enabled Master switch: off means Entry's own executor and setValue.
+ * @property {boolean} compile Compile block scripts to JS (applied while stopped).
+ * @property {boolean} deferViews Redraw variable views once per tick (applied while stopped).
+ * @property {boolean} osd Show the on-screen display (applied at once).
+ * @property {boolean} smooth Draw between ticks at the monitor's rate (applied at once).
+ */
+
 (() => {
   const PAGE = 'entry-turbo-page'
   const BRIDGE = 'entry-turbo-bridge'
+  /** @type {TurboSettings} */
   const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
   const waiting = new Map()
   let pageReady = false

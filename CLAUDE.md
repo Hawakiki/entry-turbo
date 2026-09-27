@@ -32,7 +32,7 @@
 | `perf`     | 결과는 그대로, 더 빠르게                 |
 | `refactor` | 동작 그대로 구조만                       |
 | `test`     | `bench/` 검증·측정 도구                  |
-| `docs`     | README·이 파일                           |
+| `docs`     | README·이 파일·JSDoc                     |
 | `ci`       | `.github/workflows/`                     |
 | `chore`    | 설정·빌드 스크립트·이름·버전 같은 나머지 |
 
