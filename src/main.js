@@ -77,7 +77,7 @@
     }
     clearInterval(wait)
     turbo = installEntryTurbo()
-    osd = installEntryOsd()
+    osd = typeof installEntryOsd === 'function' ? installEntryOsd() : null
     hookRun()
     window.postMessage({ source: PAGE, type: 'ready' }, '*')
     apply()

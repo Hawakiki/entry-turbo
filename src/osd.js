@@ -54,7 +54,7 @@ function installEntryOsd() {
 
   // ── drawing ──
   const STYLE = `
-    #entry-turbo-osd { position: fixed; z-index: 2147483647; pointer-events: none; padding: 5px 8px 6px;
+    #entry-turbo-osd { position: fixed; z-index: 2147483647; pointer-events: none; padding: 5px 8px 6px; transform-origin: 0 0;
       background: rgba(0, 0, 0, 0.6); border-radius: 4px;
       font: bold 12px/1.35 Consolas, 'D2Coding', monospace; color: #fff; white-space: pre;
       text-shadow: 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 1px 1px #000; }
@@ -91,6 +91,11 @@ function installEntryOsd() {
     if (dt >= 0.5) {
       last = { at: now, ticks: tickCount, frames, fps: (frames - last.frames) / dt, tps: (tickCount - last.ticks) / dt }
     }
+    // in fullscreen only the fullscreen element's subtree is drawn (the player makes Entry's container fullscreen):
+    // live inside it then, and back in the body after Esc
+    const host = document.fullscreenElement || document.webkitFullscreenElement || document.body
+    if (el.parentElement !== host)
+      host.appendChild(el)
     const r = stage()
     if (!r) {
       el.style.display = 'none'
@@ -99,6 +104,8 @@ function installEntryOsd() {
     el.style.display = ''
     el.style.left = `${Math.round(r.left + 4)}px`
     el.style.top = `${Math.round(r.top + 4)}px`
+    // grows with the stage (fullscreen), up to twice the size
+    el.style.transform = `scale(${Math.min(2, Math.max(1, r.width / 900)).toFixed(2)})`
 
     const running = Entry.engine && Entry.engine.state === 'run'
     const recent = ticks.slice(-30)
@@ -159,8 +166,11 @@ function installEntryOsd() {
       return
     visible = on
     if (on) {
-      if (!el)
+      if (!el) {
         build()
+        document.addEventListener('fullscreenchange', render)
+        document.addEventListener('webkitfullscreenchange', render)
+      }
       el.style.display = ''
       requestAnimationFrame(frame)
       timer = setInterval(render, 250)
