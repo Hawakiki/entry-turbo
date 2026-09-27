@@ -1,6 +1,6 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
-const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true }
+const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
 const KEYS = Object.keys(DEFAULTS)
 const $ = id => document.getElementById(id)
 
@@ -30,11 +30,13 @@ function render(st) {
   const reasons = Object.entries(s.reasons).sort((a, b) => b[1] - a[1])
   const hats = reasons.filter(([r]) => r.startsWith('시작 블록')).reduce((n, [, c]) => n + c, 0)
   const blocks = reasons.filter(([r]) => !r.startsWith('시작 블록'))
-  const on = [st.compiling && '컴파일', st.deferring && '표시 모으기'].filter(Boolean)
+  const on = [st.compiling && '컴파일', st.deferring && '표시 모으기', st.smooth && st.smooth.on && '보간'].filter(Boolean)
   const unknown = st.engine.unknown
   let html = '<table>'
   html += row('실행', `${st.state === 'run' ? '실행 중' : st.state === 'pause' ? '일시정지' : '멈춤'} · 부스트 ${st.boost ? '켬' : '꺼짐'}`)
   html += row('적용 중', on.length ? `<span class="ok">${on.join(' · ')}</span>` : '없음 (원래 방식)')
+  if (st.smooth && !st.smooth.supported && st.wanted.smooth)
+    html += row('', '<span class="warn">이 작품은 WebGL로 그려서 보간을 못 합니다</span>')
   if (st.pending)
     html += row('', '<span class="warn">바꾼 설정은 멈추면 적용됩니다</span>')
   html += row('엔진', st.engine.coreKnown ? '<span class="ok">확인된 버전</span>' : '<span class="warn">확인 안 된 버전: 컴파일 꺼짐</span>')

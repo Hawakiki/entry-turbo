@@ -18,7 +18,19 @@
 
     <section class="switches">
       <label><input type="checkbox" id="osd" /> 속도계(OSD) 표시</label>
-      <p class="note">무대 왼쪽 위에 FPS·틱·스크립트 시간·그래프를 띄웁니다. 켜고 끄기는 바로 적용.</p>
+      <div class="opt">
+        <label
+          ><input type="checkbox" id="smooth" /> 부드럽게 (보간)
+          <span class="info" tabindex="0" aria-label="보간이란">ⓘ</span></label
+        >
+        <p class="tip">
+          <b>보간</b>: 작품은 그대로 1초에 60번 돌고, 화면만 모니터 주사율(예: 144Hz)로 그리면서 틱과 틱 사이의 위치를
+          채워 넣습니다. 블록 실행 결과는 바뀌지 않습니다.<br />
+          화면이 실제보다 최대 한 틱(약 17ms) 늦게 보이고, 60Hz 모니터에서는 차이가 없습니다. 순간이동·큰 회전·뒤집기는
+          채우지 않습니다. 오브젝트가 많은 작품은 조금 무거워질 수 있습니다.
+        </p>
+      </div>
+      <p class="note">속도계와 보간은 켜고 끄면 바로 적용됩니다.</p>
     </section>
 
     <section id="status">

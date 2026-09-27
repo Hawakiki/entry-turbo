@@ -14,7 +14,7 @@ const flag = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d)
 const id = args.find(a => /^[0-9a-f]{24}$/.test(a)) || '6ab8a912e74f73da0867850c'
 const WAIT = Number(flag('--wait', 12))
 const OUT = flag('-o', 'shot.png')
-const INJECT = ['../src/turbo.js', '../src/osd.js', '../src/main.js'].map(f => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n;\n')
+const INJECT = ['../src/turbo.js', '../src/osd.js', '../src/smooth.js', '../src/main.js'].map(f => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n;\n')
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const FRAME = `[...document.querySelectorAll('iframe')].map((f) => f.contentWindow).find((w) => { try { return w.Entry && w.Entry.engine } catch (e) { return false } })`
 

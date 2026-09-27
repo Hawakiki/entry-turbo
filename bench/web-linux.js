@@ -16,7 +16,7 @@ const MODES = (args.includes('--modes') ? args[args.indexOf('--modes') + 1] : 't
 const PAGE = 'https://playentry.org/project/6ab8a912e74f73da0867850c'
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const PROFILE = path.join(os.tmpdir(), 'entry-bench-chrome')
-const INJECT = ['../src/turbo.js', '../src/osd.js', '../src/main.js'].map(f => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n;\n')
+const INJECT = ['../src/turbo.js', '../src/osd.js', '../src/smooth.js', '../src/main.js'].map(f => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n;\n')
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // the player frame's window, from the top page (same origin)

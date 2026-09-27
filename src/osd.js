@@ -45,11 +45,14 @@ function installEntryOsd() {
     tickMs = 0
     tickOpen = false
   }
-  function frame() {
-    if (!visible)
-      return
-    frames++
-    requestAnimationFrame(frame)
+  // FPS = times the stage was actually drawn (Entry draws only when something changed, at most every ~16 ms;
+  // with smooth motion on, every animation frame)
+  const stageObj = Entry.stage
+  const draw = stageObj.updateForce
+  stageObj.updateForce = function (...args) {
+    if (visible)
+      frames++
+    return draw.apply(this, args)
   }
 
   // ── drawing ──
@@ -117,7 +120,7 @@ function installEntryOsd() {
     const others = s ? Object.entries(s.reasons).filter(([k]) => k.startsWith('시작 블록')).reduce((n, [, c]) => n + c, 0) : 0
     const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null
     const lines = [
-      `<span class="k">TURBO </span> ${on ? '<span class="on">ON </span>' : '<span class="off">OFF</span>'}${turbo && turbo.deferring ? ' <span class="u">VIEW</span>' : ''}${Entry.isTurbo ? ' <span class="b">BOOST</span>' : ''}`,
+      `<span class="k">TURBO </span> ${on ? '<span class="on">ON </span>' : '<span class="off">OFF</span>'}${turbo && turbo.deferring ? ' <span class="u">VIEW</span>' : ''}${Entry.isTurbo ? ' <span class="b">BOOST</span>' : ''}${globalThis.EntrySmooth && globalThis.EntrySmooth.on ? ' <span class="b">SMOOTH</span>' : ''}`,
       `<span class="k">FPS   </span> ${pad(Math.round(last.fps), 4)}`,
       `<span class="k">TICK  </span> ${pad(running ? Math.round(last.tps) : 0, 4)} <span class="u">/s</span>`,
       `<span class="k">SCRIPT</span> ${pad(avg.toFixed(2), 6)} <span class="u">ms</span> ${load > 100 ? `<span class="hot">${load}%</span>` : `${load}%`}`,
@@ -172,7 +175,7 @@ function installEntryOsd() {
         document.addEventListener('webkitfullscreenchange', render)
       }
       el.style.display = ''
-      requestAnimationFrame(frame)
+
       timer = setInterval(render, 250)
       render()
     }

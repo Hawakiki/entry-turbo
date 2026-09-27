@@ -1,4 +1,4 @@
-/* global Entry, installEntryTurbo, installEntryOsd */
+/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth */
 // Extension, page side (MAIN world, every playentry.org frame). Waits for Entry in this frame, installs the compiler
 // and the on-screen display, follows the popup's settings (through bridge.js) and answers status requests.
 // Compiler settings change only while the project is stopped: switching the executor mid-run would restart compiled
@@ -8,13 +8,16 @@
   const BRIDGE = 'entry-turbo-bridge'
   let turbo = null
   let osd = null
-  let wanted = { enabled: true, compile: true, deferViews: true, osd: true }
+  let smooth = null
+  let wanted = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
   let applied = null
 
   const key = () => JSON.stringify([wanted.enabled, wanted.compile, wanted.deferViews])
   function apply() {
     if (osd)
       osd.show(Boolean(wanted.osd))
+    if (smooth)
+      smooth.set(Boolean(wanted.smooth))
     if (!turbo || Entry.engine.state !== 'stop' || key() === applied)
       return
     if (wanted.enabled)
@@ -48,6 +51,7 @@
       boost: Boolean(Entry.isTurbo),
       compiling: turbo.compiling,
       deferring: turbo.deferring,
+      smooth: smooth ? { on: smooth.on, supported: smooth.supported } : null,
       wanted,
       pending: key() !== applied,
       engine: turbo.engine(),
@@ -67,7 +71,7 @@
     }
   })
 
-  const ready = () => window.Entry && Entry.Executor && Entry.Variable && Entry.Scope && Entry.Code && Entry.block && Entry.engine && Entry.engine.toggleRun
+  const ready = () => window.Entry && Entry.stage && Entry.container && Entry.Executor && Entry.Variable && Entry.Scope && Entry.Code && Entry.block && Entry.engine && Entry.engine.toggleRun
   const since = Date.now()
   const wait = setInterval(() => {
     if (!ready()) {
@@ -78,6 +82,8 @@
     clearInterval(wait)
     turbo = installEntryTurbo()
     osd = typeof installEntryOsd === 'function' ? installEntryOsd() : null
+    smooth = typeof installEntrySmooth === 'function' ? installEntrySmooth() : null
+    globalThis.EntrySmooth = smooth
     hookRun()
     window.postMessage({ source: PAGE, type: 'ready' }, '*')
     apply()

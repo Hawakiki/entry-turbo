@@ -19,6 +19,7 @@
       "js": [
         "src/turbo.js",
         "src/osd.js",
+        "src/smooth.js",
         "src/main.js"
       ],
       "world": "MAIN",

@@ -93,3 +93,32 @@ code {
   font-weight: bold;
   cursor: pointer;
 }
+.info {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: help;
+  font-size: 12px;
+}
+.info:hover,
+.info:focus {
+  color: var(--fg);
+  outline: none;
+}
+.tip {
+  display: none;
+  margin: 4px 0 2px 18px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 12px;
+}
+.opt:has(.info:hover) .tip,
+.opt:has(.info:focus) .tip {
+  display: block;
+}
