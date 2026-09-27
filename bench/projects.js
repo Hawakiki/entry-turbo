@@ -87,6 +87,15 @@ export function benchProject({ unroll = 1 } = {}) {
   }
 }
 
+// the bench project plus one function, so the editor has a function call block to fingerprint
+export function functionProject() {
+  const p = benchProject()
+  const fn = D.FUNC('더하기', [D.ADD('합', 1)])
+  p.functions = [fn]
+  p.objects[0].script = D.script([D.HAT_RUN(), D.CALL('더하기')])
+  return p
+}
+
 export const BLOCKS_PER_BODY = (() => {
   let n = 0
   const count = (b) => {

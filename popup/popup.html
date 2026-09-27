@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>엔트리 터보</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>엔트리 터보 <span class="tag">실험</span></h1>
+
+    <section class="switches">
+      <label><input type="checkbox" id="enabled" /> 켜기</label>
+      <label class="sub"><input type="checkbox" id="compile" /> 블록을 JS로 컴파일</label>
+      <label class="sub"><input type="checkbox" id="deferViews" /> 변수 표시 갱신 모으기</label>
+      <p class="note">실행 중에 바꾸면 멈춘 뒤 다음 실행부터 적용됩니다.</p>
+    </section>
+
+    <section id="status">
+      <p class="muted">이 탭을 확인하는 중…</p>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

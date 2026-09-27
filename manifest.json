@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "엔트리 터보 (실험)",
+  "version": "0.1.0",
+  "description": "엔트리 작품의 블록을 JS로 바꿔 빠르게 실행합니다. 결과는 원래 실행과 같게 맞춥니다.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "엔트리 터보",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://playentry.org/*"],
+      "js": ["src/turbo.js", "src/main.js"],
+      "world": "MAIN",
+      "all_frames": true,
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://playentry.org/*"],
+      "js": ["src/bridge.js"],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ]
+}

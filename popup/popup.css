@@ -1,0 +1,84 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #6e7781;
+  --line: #d0d7de;
+  --accent: #1a7f37;
+  --warn: #9a6700;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161b22;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --line: #30363d;
+    --accent: #3fb950;
+    --warn: #d29922;
+  }
+}
+body {
+  width: 320px;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    13px/1.5 system-ui,
+    'Malgun Gothic',
+    sans-serif;
+}
+h1 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.tag {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+section {
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+}
+label {
+  display: block;
+  margin: 2px 0;
+}
+label.sub {
+  margin-left: 18px;
+  color: var(--muted);
+}
+.note,
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+td {
+  padding: 1px 0;
+  vertical-align: top;
+}
+td:first-child {
+  color: var(--muted);
+  width: 90px;
+}
+.ok {
+  color: var(--accent);
+}
+.warn {
+  color: var(--warn);
+}
+ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+code {
+  font-size: 12px;
+}

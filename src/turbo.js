@@ -13,8 +13,11 @@
 // A script that uses any block outside the known set stays on Entry's executor, untouched.
 // Separately, deferViews makes every variable write (compiled or not) update its stage view once per tick instead of
 // on each write: Entry's Variable.setValue redraws the view even for a hidden variable (14 µs a call, measured).
-// Loaded into the page as a classic script; exposes globalThis.EntryTurbo.
-(() => {
+// Every copied rule is guarded by a fingerprint of the Entry function it copies (see KNOWN): on a build that was not
+// read and checked, that part runs on Entry's own code instead.
+// Loaded into the page as a classic script. Installs at once when Entry is there, otherwise leaves
+// installEntryTurbo() for the extension to call; exposes globalThis.EntryTurbo.
+function installEntryTurbo() {
   const previous = globalThis.EntryTurbo
   previous?.disable()
 
@@ -26,8 +29,120 @@
   const filterReserved = p => Entry.Scope.prototype.filterReservedKeywords(p)
   const RESULT = Object.freeze({ promises: Object.freeze([]), blocks: Object.freeze([]) })
 
+  // ── engine fingerprints ──
+  // FNV-1a of each function's source, compared with the builds whose code the rules were copied from and checked
+  // against: offline editor 2.1.35 and playentry.org (workspace and player) as of 2026-09-27.
+  // @known-start (written by bench/fingerprints.js)
+  const KNOWN = {
+    'Code.tick': ['cpjtog', 'xv38wg'],
+    'Executor.breakLoop': ['1g2ic3c', '1sknkvg'],
+    'Executor.continueLoop': ['14vc9ei', '5c8eb1'],
+    'Executor.execute': ['3b3t5q', 'ewwj1r'],
+    'Executor.stepInto': ['12hzmzg', '1nkypnz'],
+    'Scope._getParamIndex': ['91a8ok', 'lohgbc'],
+    'Scope.getBooleanValue': ['2dtti4', 'hs8q68'],
+    'Scope.getField': ['ejrll2', 'vk79qb'],
+    'Scope.getNumberValue': ['1yyc83f', '93k4jm'],
+    'Scope.getParams': ['1vww9af', 'zimsl9'],
+    'Scope.getStringValue': ['3srpan', 'v7c3zi'],
+    'Scope.getValue': ['1ao6md7', 'u4cxod'],
+    'Scope.run': ['8hb6jr', 'qdq71h'],
+    'Variable.setValue': ['1xcx7on', 'zh4969'],
+    'block:False': ['1dzevcc', '1edbv35'],
+    'block:Talebot_Move': ['117yrkk', 'hrkld5'],
+    'block:True': ['1d9glt8', 'h3wfwv'],
+    'block:_if': ['14i3ct1', 'smqcrh'],
+    'block:add_value_to_list': ['jmnyp7', 'yuqdmu'],
+    'block:boolean_and_or': ['19cdo61', '1a1jj9'],
+    'block:boolean_basic_operator': ['1pxl00', '4xz3i1'],
+    'block:boolean_not': ['16dodrz', '9gdd2x'],
+    'block:calc_basic': ['1imd5e5', '1wgt2ub'],
+    'block:change_value_list_index': ['23c8kk', 'mhh6pu'],
+    'block:change_variable': ['13bdmk', '1s1dxst'],
+    'block:char_at': ['1uvljqw', 'ifxaik'],
+    'block:combine_something': ['12haxuu', '1pgurn0'],
+    'block:continue_repeat': ['1vyfpx6', 'b1efd6'],
+    'block:func_': ['1tntz0p', 'ecqloe'],
+    'block:function_create': ['1cklgt0', '1okuh48'],
+    'block:get_project_timer_value': ['1rjfaed', '1vgq2m2'],
+    'block:get_variable': ['1vfewif', 'tl6w5y'],
+    'block:if_else': ['1mv9vxh', '7h82wl'],
+    'block:index_of_string': ['jqssx7', 'v8hh16'],
+    'block:is_press_some_key': ['1eqrrnx', '7dhqzd'],
+    'block:length_of_list': ['16uhpj2', '6duprr'],
+    'block:length_of_string': ['1cq9sj5', 'f5t5w7'],
+    'block:number': ['1fuq782', '1imlaz4'],
+    'block:quotient_and_mod': ['12ef9t3', '1a6ykhn'],
+    'block:remove_value_from_list': ['wnuqyr', 'y71dym'],
+    'block:repeat_basic': ['1jln2cp', '3ua9p1'],
+    'block:repeat_inf': ['11ilb7f', '11x2z5l'],
+    'block:repeat_while_true': ['1cfzz7v', '68x0ts'],
+    'block:replace_string': ['52es5p', '6bg1ju'],
+    'block:set_variable': ['11waqzg', '17dg5rk'],
+    'block:stop_repeat': ['1a2olq', '68go7o'],
+    'block:substring': ['1v0gnsz', 'mr2nzl'],
+    'block:text': ['9ihhwl', 'wzxql5'],
+    'block:value_of_index_from_list': ['d5cnji', 'h0ba4m'],
+    'block:when_run_button_click': ['19m6n4e', 'rbkazb'],
+    'block:when_scene_start': ['19m6n4e', 'rbkazb'],
+    'block:when_some_key_pressed': ['19m6n4e', 'rbkazb'],
+  }
+  // @known-end
+  const hash = (fn) => {
+    const s = String(fn)
+    let h = 0x811C9DC5
+    for (let i = 0; i < s.length; i++)
+      h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+    return (h >>> 0).toString(36)
+  }
+  // Entry's own functions whose behaviour the compiler reproduces (read before anything is patched)
+  const CORE = {
+    'Executor.execute': originalExecute,
+    'Executor.continueLoop': proto.continueLoop,
+    'Executor.breakLoop': proto.breakLoop,
+    'Executor.stepInto': proto.stepInto,
+    'Code.tick': Entry.Code.prototype.tick,
+    'Scope.run': Entry.Scope.prototype.run,
+    'Scope.getParams': Entry.Scope.prototype.getParams,
+    'Scope.getValue': Entry.Scope.prototype.getValue,
+    'Scope.getNumberValue': Entry.Scope.prototype.getNumberValue,
+    'Scope.getBooleanValue': Entry.Scope.prototype.getBooleanValue,
+    'Scope.getStringValue': Entry.Scope.prototype.getStringValue,
+    'Scope.getField': Entry.Scope.prototype.getField,
+    'Scope._getParamIndex': Entry.Scope.prototype._getParamIndex,
+  }
+  // blocks with an inline rule or compiled control flow; function call blocks all share one func ('func_')
+  const RULE_BLOCKS = ['when_run_button_click', 'when_scene_start', 'when_some_key_pressed', 'number', 'text', 'True', 'False', 'get_variable', 'set_variable', 'change_variable', 'calc_basic', 'quotient_and_mod', 'boolean_basic_operator', 'boolean_and_or', 'boolean_not', 'repeat_basic', 'repeat_inf', 'repeat_while_true', '_if', 'if_else', 'stop_repeat', 'continue_repeat', 'value_of_index_from_list', 'change_value_list_index', 'add_value_to_list', 'remove_value_from_list', 'length_of_list', 'combine_something', 'substring', 'length_of_string', 'char_at', 'index_of_string', 'replace_string', 'is_press_some_key', 'get_project_timer_value', 'Talebot_Move', 'function_create', 'func_']
+  const fingerprints = previous ? previous.fingerprints : {}
+  for (const [key, fn] of Object.entries({ ...CORE, 'Variable.setValue': originalSetValue })) {
+    if (!(key in fingerprints))
+      fingerprints[key] = hash(fn)
+  }
+  const unknown = new Set()
+  const isKnown = (key) => {
+    const ok = (KNOWN[key] || []).includes(fingerprints[key])
+    if (!ok)
+      unknown.add(key)
+    return ok
+  }
+  // a block's rule may be used: its func is one of the checked builds
+  function blockKnown(type) {
+    const key = type.startsWith('func_') ? 'block:func_' : `block:${type}`
+    if (!(key in fingerprints)) {
+      const schema = Entry.block[type]
+      if (!schema || !schema.func)
+        return false
+      fingerprints[key] = hash(schema.func)
+    }
+    return isKnown(key)
+  }
+  const coreKnown = Object.keys(CORE).every(isKnown)
+  const deferKnown = isKnown('Variable.setValue')
+
   // start blocks whose func is `return script.callReturn()`: the script runs from the next block
   const HATS = new Set(['when_run_button_click', 'when_scene_start', 'when_some_key_pressed'])
+  // blocks whose control flow the compiler writes itself
+  const CONTROL = new Set(['repeat_basic', 'repeat_inf', 'repeat_while_true', '_if', 'if_else', 'stop_repeat', 'continue_repeat', 'Talebot_Move'])
   // run through their own func with a light scope (tier 1). Values: synchronous, no state on the scope. Statements:
   // also return undefined/null (next block) and never touch the executor's call stack. Checked in the editor.
   const TIER1_VALUES = new Set(['number', 'text', 'True', 'False', 'get_variable', 'calc_basic', 'quotient_and_mod', 'calc_operation', 'boolean_basic_operator', 'boolean_and_or', 'boolean_not', 'value_of_index_from_list', 'length_of_list', 'combine_something', 'substring', 'length_of_string', 'char_at', 'index_of_string', 'replace_string', 'is_press_some_key', 'get_project_timer_value'])
@@ -51,9 +166,8 @@
   class Unsupported extends Error {}
 
   // ── runtime: same rules as Entry.Scope, Entry.Utils and the block funcs ──
-  // Entry.Utils.isNumber uses /^-?\d+\.?\d*$/; this accepts the same strings without the backtracking
-  const NUMBER_RE = /^-?\d+(?:\.\d*)?$/
-  const isNumber = v => typeof v === 'number' || (typeof v === 'string' && NUMBER_RE.test(v))
+  // the page's own: builds differ (the web one also takes exponents, "1e5")
+  const isNumber = Entry.Utils.isNumber
   // Scope.getNumberValue = parseFloat(v) || 0; for a number that is v itself except NaN and -0 (both become 0)
   const num = v => (typeof v === 'number' ? v || 0 : Number.parseFloat(v) || 0)
   // Scope.getBooleanValue
@@ -460,7 +574,7 @@
       return literal(c, filterReserved(p))
     if (!Entry.block[p.type])
       throw new Unsupported(`unknown ${p.type}`)
-    if (options.inline) {
+    if (options.inline && blockKnown(p.type)) {
       const code = inlineExpr(c, p)
       if (code !== null)
         return code
@@ -521,6 +635,8 @@
     const after = c.fn ? '' : 'if (ex.isEnd()) return;\n'
     const n = c.n++
     const s = (code, open = true) => ({ code, open })
+    if (CONTROL.has(b.type) && !blockKnown(b.type))
+      throw new Unsupported(`unchecked build: ${b.type}`)
     switch (b.type) {
       case 'repeat_basic': {
         onlyBlocksAt(b, [0])
@@ -571,7 +687,7 @@
       case 'Talebot_Move': {
         const slot = b.params[1]
         const loop = c.loops.at(-1)
-        if (!isBlock(slot) || slot.type !== 'continue_repeat')
+        if (!isBlock(slot) || slot.type !== 'continue_repeat' || !blockKnown('continue_repeat'))
           throw new Unsupported('Talebot_Move')
         if (!loop)
           throw new Unsupported('weld outside a loop')
@@ -583,7 +699,7 @@
     if (b.type.startsWith('func_')) {
       onlyBlocksAt(b, [])
       const id = b.type.slice(5)
-      const f = options.functions ? compileFunction(id) : null
+      const f = options.functions && blockKnown(b.type) && blockKnown('function_create') ? compileFunction(id) : null
       if (!f) {
         c.yields = true
         return s(`${at}yield* entryFunction(${JSON.stringify(id)}, ex, ent);\n${after}`)
@@ -592,7 +708,7 @@
         c.yields = true
       return s(`${at}${f.gen ? 'yield* ' : ''}FT.${f.name}(ex, ent);\n${after}`)
     }
-    if (options.inline) {
+    if (options.inline && blockKnown(b.type)) {
       const e = q => expr(c, b.params[q])
       switch (b.type) {
         case 'set_variable':
@@ -719,12 +835,24 @@
     return f.failed ? null : f
   }
 
+  // a start block the compiler takes; the others are noted once each (the popup lists them)
+  const seenHats = new WeakSet()
+  function compilableHat(hat) {
+    if (HATS.has(hat.type) && blockKnown(hat.type))
+      return true
+    if (!seenHats.has(hat)) {
+      seenHats.add(hat)
+      note(`시작 블록 ${hat.type}`)
+    }
+    return false
+  }
+
   // ── executor hook ──
   function start(ex) {
     if (ex.isFuncExecutor || ex._callStack.length)
       return null
     const hat = ex.scope && ex.scope.block
-    if (!hat || !HATS.has(hat.type))
+    if (!hat || !compilableHat(hat))
       return null
     let factory = cache.get(hat)
     if (factory === undefined) {
@@ -803,29 +931,55 @@
     }
   }
 
+  // forget compiled code (blocks may have been edited); stats start over
+  function reset() {
+    cache = new WeakMap()
+    fns = new Map()
+    FT = {}
+    Object.assign(stats, newStats())
+  }
+
   globalThis.EntryTurbo = {
     originalExecute,
     originalSetValue,
+    fingerprints,
     stats,
+    // what an unchecked Entry build switched off
+    engine: () => ({ coreKnown, deferKnown, unknown: [...unknown] }),
+    // compile / deferViews ask for; each stays off on a build whose code was not checked
     enable(opts = {}) {
       Object.assign(options, DEFAULTS, opts)
-      cache = new WeakMap()
-      fns = new Map()
-      FT = {}
-      Object.assign(stats, newStats())
-      proto.execute = options.compile ? turboExecute : originalExecute
-      variableProto.setValue = options.deferViews ? deferredSetValue : originalSetValue
+      reset()
+      proto.execute = options.compile && coreKnown ? turboExecute : originalExecute
+      variableProto.setValue = options.deferViews && deferKnown ? deferredSetValue : originalSetValue
     },
     disable() {
       proto.execute = originalExecute
       variableProto.setValue = originalSetValue
       flushViews()
-      cache = new WeakMap()
-      fns = new Map()
-      FT = {}
+      reset()
+    },
+    reset,
+    get options() {
+      return { ...options }
     },
     get enabled() {
       return proto.execute === turboExecute || variableProto.setValue === deferredSetValue
+    },
+    get compiling() {
+      return proto.execute === turboExecute
+    },
+    get deferring() {
+      return variableProto.setValue === deferredSetValue
+    },
+    // every fingerprint this build has for the checked set (bench/fingerprints.js collects them into KNOWN)
+    collectFingerprints() {
+      for (const type of RULE_BLOCKS) {
+        const t = type === 'func_' ? Object.keys(Entry.block).find(k => k.startsWith('func_')) : type
+        if (t)
+          blockKnown(t)
+      }
+      return { ...fingerprints }
     },
     // compile every script of the loaded project now (normally that happens as each one first runs)
     check() {
@@ -833,7 +987,7 @@
       for (const obj of Entry.container.getAllObjects()) {
         for (const thread of obj.script.getThreads()) {
           const hat = thread.getFirstBlock()
-          if (hat && HATS.has(hat.type) && !cache.has(hat))
+          if (hat && compilableHat(hat) && !cache.has(hat))
             cache.set(hat, compile(hat))
         }
       }
@@ -849,4 +1003,8 @@
       }
     },
   }
-})()
+  return globalThis.EntryTurbo
+}
+
+if (globalThis.Entry && globalThis.Entry.Executor)
+  installEntryTurbo()
