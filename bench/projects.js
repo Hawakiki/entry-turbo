@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 export const ENTRY_TEST = 'C:/path/to/entry-test'
 const D = require(`${ENTRY_TEST}/omok/dsl.js`)
+const Blocks = require(`${ENTRY_TEST}/src/blocks.js`)
 
 const LIST_SIZE = 100
 
@@ -93,6 +94,40 @@ export function functionProject() {
   const fn = D.FUNC('더하기', [D.ADD('합', 1)])
   p.functions = [fn]
   p.objects[0].script = D.script([D.HAT_RUN(), D.CALL('더하기')])
+  return p
+}
+
+// UI blocks (motion, rotation, speech, text, wait, message, clone, stop) on a text box, for the generic path
+export function uiProject() {
+  const mk = (type, params, statements) => Blocks.block(type, params, statements)
+  const main = [
+    D.HAT_RUN(),
+    D.SET('완료', 0),
+    D.SET('카운트', 0),
+    D.SET('신호수', 0),
+    D.SET('클론수', 0),
+    D.REPEAT(30, [
+      mk('move_direction', [D.NUM(3), null]),
+      mk('rotate_relative', [D.NUM(7), null]),
+      D.ADD('카운트', 1),
+      D.IF(D.EQ(D.MOD(D.V('카운트'), 5), 0), [D.BROADCAST('신호')]),
+    ]),
+    D.WAIT(0.1),
+    D.REPEAT(3, [D.CLONE_SELF()]),
+    D.WAIT_UNTIL(D.EQ(D.V('클론수'), 3)),
+    D.LOCATE(D.V('카운트'), D.MINUS(0, D.V('카운트'))),
+    mk('dialog', [D.JOIN('말 ', D.V('신호수')), 'speak', null]),
+    D.TEXT_WRITE(D.JOIN('끝 ', D.V('카운트'))),
+    mk('text_append', [D.TXT('!'), null]),
+    D.SET('완료', 1),
+  ]
+  const onSignal = [D.HAT_MSG('신호'), D.ADD('신호수', 1), mk('move_y', [D.NUM(1), null])]
+  const onClone = [D.HAT_CLONE(), D.ADD('클론수', 1), mk('move_x', [D.NUM(10), null]), D.STOP_THREAD(), D.ADD('클론수', 100)]
+  const p = benchProject()
+  p.objects = [textObject('주인공', [main, onSignal, onClone])]
+  p.variables = ['완료', '카운트', '신호수', '클론수'].map(n => D.variable(n))
+  p.messages = [D.message('신호')]
+  p.name = 'turbo-ui'
   return p
 }
 

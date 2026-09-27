@@ -79,6 +79,7 @@ function installEntryTurbo() {
     'block:repeat_while_true': ['1cfzz7v', '68x0ts'],
     'block:replace_string': ['52es5p', '6bg1ju'],
     'block:set_variable': ['11waqzg', '17dg5rk'],
+    'block:stop_object': ['14tmija', '1b2gex3'],
     'block:stop_repeat': ['1a2olq', '68go7o'],
     'block:substring': ['1v0gnsz', 'mr2nzl'],
     'block:text': ['9ihhwl', 'wzxql5'],
@@ -112,7 +113,7 @@ function installEntryTurbo() {
     'Scope._getParamIndex': Entry.Scope.prototype._getParamIndex,
   }
   // blocks with an inline rule or compiled control flow; function call blocks all share one func ('func_')
-  const RULE_BLOCKS = ['when_run_button_click', 'when_scene_start', 'when_some_key_pressed', 'number', 'text', 'True', 'False', 'get_variable', 'set_variable', 'change_variable', 'calc_basic', 'quotient_and_mod', 'boolean_basic_operator', 'boolean_and_or', 'boolean_not', 'repeat_basic', 'repeat_inf', 'repeat_while_true', '_if', 'if_else', 'stop_repeat', 'continue_repeat', 'value_of_index_from_list', 'change_value_list_index', 'add_value_to_list', 'remove_value_from_list', 'length_of_list', 'combine_something', 'substring', 'length_of_string', 'char_at', 'index_of_string', 'replace_string', 'is_press_some_key', 'get_project_timer_value', 'Talebot_Move', 'function_create', 'func_']
+  const RULE_BLOCKS = ['when_run_button_click', 'when_scene_start', 'when_some_key_pressed', 'number', 'text', 'True', 'False', 'get_variable', 'set_variable', 'change_variable', 'calc_basic', 'quotient_and_mod', 'boolean_basic_operator', 'boolean_and_or', 'boolean_not', 'repeat_basic', 'repeat_inf', 'repeat_while_true', '_if', 'if_else', 'stop_repeat', 'continue_repeat', 'value_of_index_from_list', 'change_value_list_index', 'add_value_to_list', 'remove_value_from_list', 'length_of_list', 'combine_something', 'substring', 'length_of_string', 'char_at', 'index_of_string', 'replace_string', 'is_press_some_key', 'get_project_timer_value', 'Talebot_Move', 'function_create', 'func_', 'stop_object']
   const fingerprints = previous ? previous.fingerprints : {}
   for (const [key, fn] of Object.entries({ ...CORE, 'Variable.setValue': originalSetValue })) {
     if (!(key in fingerprints))
@@ -343,14 +344,56 @@ function installEntryTurbo() {
     this.values = values
   }
   FastScope.prototype = Object.create(Entry.Scope.prototype)
+  // a value block's own func; only blocks that answer synchronously are compiled
   function call(block, schema, ex, values) {
     const scope = new FastScope(block, schema, ex, values)
-    return schema.func.call(scope, ex.entity, scope)
+    const r = schema.func.call(scope, ex.entity, scope)
+    if (r instanceof Promise)
+      throw new Error(`turbo: ${block.type} answered asynchronously`)
+    return r
   }
   function callStatement(block, schema, ex, values) {
-    const r = call(block, schema, ex, values)
+    const scope = new FastScope(block, schema, ex, values)
+    const r = schema.func.call(scope, ex.entity, scope)
     if (r !== undefined && r !== null && r !== STATIC.PASS)
       throw new Error(`turbo: ${block.type} returned ${String(r)}`)
+  }
+  // Scope.run for a statement: a Promise among the params waits for all of them (and the func then runs only if the
+  // project still runs); otherwise the func runs at once. A func-less block does nothing.
+  function invoke(scope, values) {
+    const func = scope._schema.func
+    if (!func)
+      return undefined
+    if (values.some(v => v instanceof Promise)) {
+      return Promise.all(values).then((settled) => {
+        if (Entry.engine.state === 'stop' || !scope.block)
+          return undefined
+        scope.values = settled
+        return func.call(scope, scope.entity, scope)
+      })
+    }
+    scope.values = values
+    return func.call(scope, scope.entity, scope)
+  }
+  // Executor.execute on a Promise result: the executor pauses (Code.tick skips it); once the Promise settles it moves
+  // on, unless it settled to CONTINUE or to the block's own scope (the block then runs again). An AsyncError leaves
+  // the executor on the same block.
+  function pause(ex, promise, scope) {
+    const w = { done: false, again: false, error: null }
+    ex.paused = true
+    promise.then((v) => {
+      ex.paused = false
+      w.again = v === STATIC.CONTINUE || v === scope
+      w.done = true
+    }, (e) => {
+      ex.paused = false
+      if (e && e.name === 'AsyncError')
+        w.again = true
+      else
+        w.error = e
+      w.done = true
+    })
+    return w
   }
 
   // The weld: evaluating the continue_repeat slot runs executor.continueLoop (back to the loop block), then
@@ -423,6 +466,11 @@ function installEntryTurbo() {
     change,
     call,
     callStatement,
+    invoke,
+    pause,
+    FastScope,
+    PASS: STATIC.PASS,
+    BREAK: STATIC.BREAK,
     weld,
     entryFunction,
     repeatError: () => Lang.Blocks.FLOW_repeat_basic_errorMsg,
@@ -494,10 +542,30 @@ function installEntryTurbo() {
   // re-evaluating it has no effect and cannot throw
   const stable = p => !isBlock(p) || ['number', 'text', 'True', 'False', 'get_variable'].includes(p.type)
 
-  function tier1(c, b) {
+  // every param evaluated in order, as Scope.getParams does, for a block run through its own func
+  function args(c, b) {
     noteRefs(c, b)
-    const k = ref(c, b)
-    return [k, `[${b.params.map(p => expr(c, p)).join(', ')}]`]
+    return `[${b.params.map(p => expr(c, p)).join(', ')}]`
+  }
+
+  // Blocks run through their own func without a per-block rule ("generic"): no statements of their own and nothing in
+  // their source that reaches the executor or the call stack (checked on the page's code, so it holds per build).
+  // Value blocks must also answer synchronously.
+  const EXECUTOR_TOUCH = /\bexecutor\b|getStatement|stepInto|_callStack|isLooped|iterCount|isCondition|\.register\b|localVariables|parentExecutor|funcExecutor|funcCode|\.key\b/
+  const ASYNC_HINT = /Promise|\basync\b|\bawait\b|\.then\(|regenerator|asyncToGenerator/
+  const genericCache = new Map()
+  function generic(type, kind) {
+    const key = `${kind}:${type}`
+    if (!genericCache.has(key)) {
+      const schema = Entry.block[type]
+      let ok = Boolean(schema && typeof schema.func === 'function' && !schema.statementsKeyMap && !(schema.statements && schema.statements.length))
+      if (ok) {
+        const src = String(schema.func)
+        ok = !EXECUTOR_TOUCH.test(src) && (kind === 'statement' || !ASYNC_HINT.test(src))
+      }
+      genericCache.set(key, ok)
+    }
+    return genericCache.get(key)
   }
 
   function inlineExpr(c, p) {
@@ -579,10 +647,11 @@ function installEntryTurbo() {
       if (code !== null)
         return code
     }
-    if (!TIER1_VALUES.has(p.type))
+    if (!TIER1_VALUES.has(p.type) && !generic(p.type, 'value'))
       throw new Unsupported(p.type)
-    const [k, args] = tier1(c, p)
-    return `call(B[${k}], S[${k}], ex, ${args})`
+    const a = args(c, p)
+    const k = ref(c, p)
+    return `call(B[${k}], S[${k}], ex, ${a})`
   }
 
   // statements return { code, open }: open = control can reach the next statement
@@ -731,10 +800,26 @@ function installEntryTurbo() {
           return s(`${at}removeItem(${listRef(c, field(b, 1))}, ${e(0)});\n`)
       }
     }
-    if (!TIER1_STATEMENTS.has(b.type))
+    if (TIER1_STATEMENTS.has(b.type))
+      return s(`${at}callStatement(B[${k}], S[${k}], ex, ${args(c, b)});\n${after}`)
+    // stop_object reads this.executor only for "otherThread", to spare itself; inside a function Entry's executor is
+    // the function's own, so that case would differ there. Everything else it does is die() and clearing executors.
+    const stopObject = b.type === 'stop_object' && blockKnown(b.type) && !(c.fn && field(b, 0) === 'otherThread')
+    if (!stopObject && !generic(b.type, 'statement'))
       throw new Unsupported(b.type)
-    const [, args] = tier1(c, b)
-    return s(`${at}callStatement(B[${k}], S[${k}], ex, ${args});\n${after}`)
+    // Executor.execute's handling of a block's result, for one execution of this statement: the params are evaluated
+    // again on every run, like Scope.run; die() (the scope loses its block) ends the script, or the function
+    c.yields = true
+    const a = args(c, b)
+    const sc = `s${n}`
+    const r = `r${n}`
+    return s(`${at}{\nconst ${sc} = new FastScope(B[${k}], S[${k}], ex, null);\nfor (;;) {\n`
+      + `const ${r} = invoke(${sc}, ${a});\n`
+      + `if (${sc}.block === null) return;\n`
+      + `if (${r} === undefined || ${r} === null || ${r} === PASS) break;\n`
+      + `if (${r} === ${sc} || ${r} === BREAK) { yield; continue; }\n`
+      + `if (${r} instanceof Promise) {\nconst w = pause(ex, ${r}, ${sc});\nwhile (!w.done) yield;\nif (w.error) throw w.error;\nif (w.again) continue;\nbreak;\n}\n`
+      + `}\n}\n${after}`)
   }
 
   const errorWrap = body => `let $b = -1;\ntry {\n${body}} catch (e) {\n`
@@ -837,8 +922,19 @@ function installEntryTurbo() {
 
   // a start block the compiler takes; the others are noted once each (the popup lists them)
   const seenHats = new WeakSet()
+  // any start block whose func is only `return script.callReturn()` (checked on the page's source): the script runs
+  // from the next block, exactly as when Entry runs the hat
+  const HAT_SOURCE = /^function\s*(?:[\w$]+\s*)?\(\s*(?:[\w$]+\s*)?,\s*([\w$]+)\s*\)\s*\{\s*return\s+\1\.callReturn\(\)\s*(?:;\s*)?\}$/
+  const hatCache = new Map()
+  function plainHat(type) {
+    if (!hatCache.has(type)) {
+      const schema = Entry.block[type]
+      hatCache.set(type, Boolean(schema && typeof schema.func === 'function' && HAT_SOURCE.test(String(schema.func))))
+    }
+    return hatCache.get(type)
+  }
   function compilableHat(hat) {
-    if (HATS.has(hat.type) && blockKnown(hat.type))
+    if ((HATS.has(hat.type) && blockKnown(hat.type)) || plainHat(hat.type))
       return true
     if (!seenHats.has(hat)) {
       seenHats.add(hat)
