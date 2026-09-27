@@ -17,4 +17,23 @@ export default antfu(
       },
     },
   },
+  {
+    // page scripts run in playentry.org's main world
+    files: ['src/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: {
+        Entry: 'readonly',
+        Lang: 'readonly',
+        BigNumber: 'readonly',
+      },
+    },
+  },
+  {
+    // node CLI scripts print their results
+    files: ['bench/**/*.js'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 )
