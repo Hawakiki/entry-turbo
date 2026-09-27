@@ -22,6 +22,17 @@ body:
       placeholder: 예) 원래는 점수가 올라가는데, 터보를 켜면 0에서 멈춰요
     validations:
       required: true
+  - type: checkboxes
+    id: switches-on
+    attributes:
+      label: 문제가 생길 때 켜 둔 스위치
+      description: 확장 아이콘을 누르면 나오는 창에서 체크되어 있던 것을 모두 골라 주세요
+      options:
+        - label: 켜기
+        - label: 블록을 JS로 컴파일
+        - label: 변수 표시 갱신 모으기
+        - label: 속도계(OSD) 표시
+        - label: 부드럽게 (보간)
   - type: dropdown
     id: switches
     attributes:
@@ -31,8 +42,10 @@ body:
         - 아직 안 해 봤어요
         - '"블록을 JS로 컴파일"을 끄면 괜찮아져요'
         - '"변수 표시 갱신 모으기"를 끄면 괜찮아져요'
-        - 둘 다 꺼도 이상해요
+        - '"부드럽게 (보간)"을 끄면 괜찮아져요'
+        - '"속도계(OSD) 표시"를 끄면 괜찮아져요'
         - '"켜기"를 끄면 괜찮아져요'
+        - 다 꺼도 이상해요
     validations:
       required: true
   - type: input
