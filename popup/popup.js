@@ -71,3 +71,38 @@ async function refresh() {
 }
 refresh()
 setInterval(refresh, 1000)
+
+// ── new version notice ──
+// Loaded unpacked, the extension never updates by itself. When the popup opens it asks GitHub's public API for the
+// latest release number (at most every 6 hours; nothing about the user is sent) and offers the download.
+const REPO = 'Hawakiki/entry-turbo'
+const current = chrome.runtime.getManifest().version
+$('version').textContent = `v${current}`
+function newer(a, b) {
+  const x = a.split('.').map(Number)
+  const y = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] || 0) !== (y[i] || 0))
+      return (x[i] || 0) > (y[i] || 0)
+  }
+  return false
+}
+async function latestRelease() {
+  const { release } = await chrome.storage.local.get({ release: null })
+  if (release && Date.now() - release.at < 6 * 3600 * 1000)
+    return release
+  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
+  const body = r.ok ? await r.json() : null
+  const next = { at: Date.now(), tag: body ? body.tag_name : null, url: body ? body.html_url : null }
+  await chrome.storage.local.set({ release: next })
+  return next
+}
+latestRelease().then((release) => {
+  const tag = release.tag && release.tag.replace(/^v/, '')
+  if (!tag || !newer(tag, current))
+    return
+  const el = $('update')
+  el.innerHTML = `새 버전 <b>v${escape(tag)}</b>이 있습니다. <a id="get">받으러 가기</a>`
+  el.hidden = false
+  $('get').addEventListener('click', () => chrome.tabs.create({ url: release.url }))
+}, () => {})

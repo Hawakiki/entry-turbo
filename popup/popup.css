@@ -82,3 +82,14 @@ ul {
 code {
   font-size: 12px;
 }
+.update {
+  margin: -4px 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+.update a {
+  color: var(--accent);
+  font-weight: bold;
+  cursor: pointer;
+}

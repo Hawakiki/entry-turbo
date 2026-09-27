@@ -8,3 +8,4 @@ dist/
 !.env.example
 ref/
 bench/source.txt
+release/

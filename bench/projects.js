@@ -1,8 +1,11 @@
 // Bench projects, built with the block DSL from entry-test (omok/dsl.js). One text-box object, no assets.
+// entry-test (the .ent / CDP / DSL tools) is found through ENTRY_TEST, or next to this repository.
 import { createRequire } from 'node:module'
+import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
-export const ENTRY_TEST = 'C:/path/to/entry-test'
+export const ENTRY_TEST = (process.env.ENTRY_TEST || fileURLToPath(new URL('../../entry-test', import.meta.url))).replaceAll('\\', '/')
 const D = require(`${ENTRY_TEST}/omok/dsl.js`)
 const Blocks = require(`${ENTRY_TEST}/src/blocks.js`)
 
