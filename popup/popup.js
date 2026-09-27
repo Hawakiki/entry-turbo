@@ -1,5 +1,6 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
+/** @type {TurboSettings} (src/bridge.js) */
 const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
 const KEYS = Object.keys(DEFAULTS)
 const $ = id => document.getElementById(id)
@@ -25,6 +26,7 @@ function escape(s) {
 }
 const row = (name, value) => `<tr><td>${name}</td><td>${value}</td></tr>`
 
+/** @param {TurboStatus} st from src/main.js, always with `installed: true` here */
 function render(st) {
   const s = st.stats
   const reasons = Object.entries(s.reasons).sort((a, b) => b[1] - a[1])

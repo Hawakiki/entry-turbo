@@ -8,6 +8,14 @@
 // Entry normally redraws from a ~16 ms timer, only when something changed (Stage#update); while this is on, that
 // timer's calls do nothing and the animation-frame loop does the drawing. Canvas 2D (createjs) stage only.
 // Defines installEntrySmooth(); the extension's main.js calls it.
+
+/**
+ * @typedef {object} EntrySmooth
+ * @property {(want: boolean) => void} set Turn smooth drawing on or off (stays off when not supported).
+ * @property {boolean} supported False on a WebGL stage.
+ * @property {boolean} on Whether it is drawing now (read-only).
+ */
+/** @returns {EntrySmooth} the switch main.js drives */
 function installEntrySmooth() {
   const stage = Entry.stage
   const ownUpdate = Object.hasOwn(stage, 'update')

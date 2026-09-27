@@ -17,6 +17,34 @@
 // read and checked, that part runs on Entry's own code instead.
 // Loaded into the page as a classic script. Installs at once when Entry is there, otherwise leaves
 // installEntryTurbo() for the extension to call; exposes globalThis.EntryTurbo.
+
+/**
+ * What EntryTurbo.enable() takes; a missing key takes its default (all true).
+ * @typedef {object} TurboOptions
+ * @property {boolean} [compile] Replace Executor#execute with compiled scripts (needs a checked core).
+ * @property {boolean} [inline] Write checked value / statement blocks as JS instead of calling their func.
+ * @property {boolean} [functions] Compile Entry functions; off calls them through Entry's own path.
+ * @property {boolean} [deferViews] Replace Variable#setValue with the once-per-tick view update.
+ */
+/**
+ * Counts since the last reset (every run from stop).
+ * @typedef {object} TurboStats
+ * @property {number} compiled Scripts running compiled.
+ * @property {number} fallback Scripts left to Entry's executor.
+ * @property {number} started Scripts started through the compiled executor.
+ * @property {number} functions Entry functions compiled.
+ * @property {number} generators Of those, the ones that can yield (generator functions).
+ * @property {number} functionFallback Call sites that go through Entry's own function path.
+ * @property {Record<string, number>} reasons Why a script or call was not compiled -> how many times.
+ */
+/**
+ * What an unchecked Entry build switched off.
+ * @typedef {object} TurboEngine
+ * @property {boolean} coreKnown The executor / scope code matches a checked build (else nothing compiles).
+ * @property {boolean} deferKnown Variable#setValue matches a checked build (else views are not deferred).
+ * @property {string[]} unknown Fingerprint keys this build does not match; those blocks run Entry's way.
+ */
+
 function installEntryTurbo() {
   const previous = globalThis.EntryTurbo
   previous?.disable()
@@ -175,8 +203,10 @@ function installEntryTurbo() {
   const VAR_FIELD = { get_variable: 0, set_variable: 0, change_variable: 0 }
   const LIST_FIELD = { value_of_index_from_list: 1, length_of_list: 1, change_value_list_index: 0, add_value_to_list: 1, remove_value_from_list: 1 }
 
+  /** @type {Required<TurboOptions>} */
   const DEFAULTS = { compile: true, inline: true, functions: true, deferViews: true }
   const options = { ...DEFAULTS }
+  /** @returns {TurboStats} all counts at zero */
   const newStats = () => ({ compiled: 0, fallback: 0, started: 0, functions: 0, generators: 0, functionFallback: 0, reasons: {} })
   const stats = newStats()
   const note = (reason) => {
@@ -1581,9 +1611,12 @@ function installEntryTurbo() {
     originalSetValue,
     fingerprints,
     stats,
-    // what an unchecked Entry build switched off
+    /** @returns {TurboEngine} what an unchecked Entry build switched off */
     engine: () => ({ coreKnown, deferKnown, unknown: [...unknown] }),
-    // compile / deferViews ask for; each stays off on a build whose code was not checked
+    /**
+     * compile / deferViews ask for; each stays off on a build whose code was not checked
+     * @param {TurboOptions} [opts]
+     */
     enable(opts = {}) {
       Object.assign(options, DEFAULTS, opts)
       reset()

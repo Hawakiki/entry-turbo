@@ -118,7 +118,10 @@ node bench/func-check.js               # 함수(매개변수·지역변수·값 
 node bench/smooth-check.js             # 보간: 그리는 횟수·틱 사이 위치·끝 상태 대조
 node bench/compile-check.js 작품.ent    # 실행 없이 전부 컴파일해 보기 (Entry.exe 재시작)
 node bench/web-linux.js                # 웹 공개작(진짜 리눅스)에 확장 스크립트를 넣고/빼고 (디버깅 크롬 9333)
+node bench/web-shot.js [작품 id] [--boost] [--zoom]   # 웹 작품에 확장을 넣고 ▶ 뒤 플레이어 캡처 (OSD·무대 눈으로 확인)
 node bench/fingerprints.js             # 새 엔트리 빌드의 코드를 읽고 규칙을 확인한 뒤 KNOWN 갱신
+node bench/dump-blocks.js              # 웹·오프라인의 블록 스키마와 func 원문 → ref/blocks-*.json (블록 분류 재료, Entry.exe 재시작)
+node bench/profile.js                  # 변수·리스트 쓰기 단가, 표시 끈 반복 벤치 (bench/run.js 가 띄운 에디터에 붙음)
 ```
 
 linux-real 비트 대조: `node linux-real/verify-app.js --turbo <이 폴더>/src/turbo.js [--boost]` (entry-test 에서).
