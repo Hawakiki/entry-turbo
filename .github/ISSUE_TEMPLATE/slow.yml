@@ -29,4 +29,4 @@ body:
     id: version
     attributes:
       label: 확장 버전
-      placeholder: v0.1.0
+      placeholder: v0.2.0

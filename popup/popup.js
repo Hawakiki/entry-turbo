@@ -1,7 +1,7 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
 /** @type {TurboSettings} (src/bridge.js) */
-const DEFAULTS = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
+const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false }
 const KEYS = Object.keys(DEFAULTS)
 const $ = id => document.getElementById(id)
 
@@ -19,6 +19,7 @@ for (const k of KEYS) {
 function syncSubs() {
   for (const k of ['compile', 'deferViews'])
     $(k).disabled = !$('enabled').checked
+  $('deepRecursion').disabled = !$('enabled').checked || !$('compile').checked
 }
 
 function escape(s) {
@@ -46,7 +47,11 @@ function render(st) {
     html += row('', `<span class="warn">확인 안 된 블록 ${unknown.length}개는 원래 방식</span>`)
   if (st.compiling) {
     html += row('스크립트', `컴파일 ${s.compiled} · 원래 방식 ${s.fallback + hats}`)
-    html += row('함수', `${s.functions}개${s.generators ? ` (양보하는 것 ${s.generators})` : ''}${s.functionFallback ? ` · 원래 방식 호출 ${s.functionFallback}` : ''}`)
+    html += row('함수', `${s.functions}개${s.generators ? ` (양보하는 것 ${s.generators})` : ''}${s.recursive ? ` · 재귀 ${s.recursive}` : ''}${s.functionFallback ? ` · 원래 방식 호출 ${s.functionFallback}` : ''}`)
+    // Entry's own recursion ends a few thousand calls deep (the browser's stack); from about here a project may stop
+    // without the extension
+    if (s.maxDepth >= 1000)
+      html += row('재귀 깊이', `최대 ${s.maxDepth.toLocaleString()} <span class="warn">확장이 없으면 멈출 수 있는 깊이입니다</span>`)
   }
   html += '</table>'
   if (st.compiling && reasons.length) {
