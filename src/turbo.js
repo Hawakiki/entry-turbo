@@ -664,6 +664,15 @@ function installEntryTurbo() {
   // the head of a compiled body: the running block's index and the scratch variables
   const head = c => `let ${['$b = -1', ...c.temps].join(', ')};\n`
   const isBlock = p => p instanceof Entry.Block
+  // Entry makes a block's params lazily: a block built before its schema existed (a call to a function whose block is
+  // generated later, a function calling itself) keeps them as plain JSON until getSchema() first loads the schema,
+  // which Entry's executor does right before running the block (issue #5). The compiler reads params and statements
+  // before anything runs, so it loads the schema first the same way.
+  function loaded(b) {
+    if (typeof b.getSchema === 'function')
+      b.getSchema()
+    return b
+  }
   function field(b, i) {
     if (isBlock(b.params[i]))
       throw new Unsupported(`${b.type}: block in field ${i}`)
@@ -1182,6 +1191,7 @@ function installEntryTurbo() {
   function expr(c, p) {
     if (!isBlock(p))
       return literal(c, filterReserved(p))
+    loaded(p)
     if (!Entry.block[p.type])
       throw new Unsupported(`unknown ${p.type}`)
     const base = baseOf(p.type)
@@ -1246,6 +1256,7 @@ function installEntryTurbo() {
   }
 
   function statement(c, b) {
+    loaded(b)
     const schema = Entry.block[b.type]
     if (!schema)
       throw new Unsupported(`unknown ${b.type}`)
@@ -1463,7 +1474,7 @@ function installEntryTurbo() {
     const base = baseOf(p.type)
     if (!FIELD_BLOCKS.has(p.type) && base !== 'function_param_string' && base !== 'function_param_boolean')
       return false
-    return p.params.every(fieldsOnly)
+    return loaded(p).params.every(fieldsOnly)
   }
   function plan(id, kind) {
     let F = fns.get(id)
@@ -1478,6 +1489,8 @@ function installEntryTurbo() {
       F.func = func
       const defType = kind === 'value' ? 'function_create_value' : 'function_create'
       const def = func.content.getEventMap('funcDef')?.[0]
+      if (def)
+        loaded(def)
       const pointer = def && def.pointer()
       if (!def || def.type !== defType || !blockKnown(defType) || pointer.length !== 4 || pointer[3] !== 0)
         throw new Unsupported('function definition')
