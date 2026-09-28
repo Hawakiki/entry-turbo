@@ -1,4 +1,4 @@
-// Build dist/ and pack it as release/entry-turbo-v<version>.zip with its SHA-256. The zip is reproducible: files in a
+// Build dist/ and pack it as release/entry-turbo-v<release version>.zip (scripts/version.js) with its SHA-256. The zip is reproducible: files in a
 // fixed order with a fixed timestamp, so anyone who builds the same commit gets the same bytes and the same hash.
 //   node scripts/release.js
 import { Buffer } from 'node:buffer'
@@ -8,10 +8,11 @@ import fs from 'node:fs'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import zlib from 'node:zlib'
+import { readReleaseVersion } from './version.js'
 
 const root = new URL('../', import.meta.url)
 execFileSync(process.execPath, [fileURLToPath(new URL('scripts/build.js', root))], { stdio: 'inherit' })
-const { version } = JSON.parse(fs.readFileSync(new URL('manifest.json', root), 'utf8'))
+const { label: version } = readReleaseVersion(root)
 
 function files(dir, base = '') {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(d => (d.isDirectory()

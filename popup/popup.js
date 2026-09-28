@@ -83,35 +83,61 @@ setInterval(refresh, 1000)
 
 // ── new version notice ──
 // Loaded unpacked, the extension never updates by itself. When the popup opens it asks GitHub's public API for the
-// latest release number (at most every 6 hours; nothing about the user is sent) and offers the download.
+// newest release (at most every 6 hours; nothing about the user is sent) and offers the download. A release is X.Y.Z,
+// a release candidate X.Y.Z-rc.N (a GitHub pre-release, version_name in the manifest, scripts/version.js). A release
+// hears only about releases (/releases/latest leaves pre-releases out); a candidate also about newer candidates.
 const REPO = 'Hawakiki/entry-turbo'
-const current = chrome.runtime.getManifest().version
+const API = { headers: { Accept: 'application/vnd.github+json' } }
+const manifest = chrome.runtime.getManifest()
+const current = manifest.version_name || manifest.version
+const testing = current.includes('-')
 $('version').textContent = `v${current}`
+// [X, Y, Z, candidate number, Infinity for the release itself]: a candidate comes before its release
+function parseVersion(v) {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(v || '')
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Infinity : Number(m[4])] : null
+}
 function newer(a, b) {
-  const x = a.split('.').map(Number)
-  const y = b.split('.').map(Number)
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    if ((x[i] || 0) !== (y[i] || 0))
-      return (x[i] || 0) > (y[i] || 0)
+  const x = parseVersion(a)
+  const y = parseVersion(b)
+  if (!x || !y)
+    return false
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] !== y[i])
+      return x[i] > y[i]
   }
   return false
 }
+async function fetchNewest() {
+  if (!testing) {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, API)
+    const body = r.ok ? await r.json() : null
+    return body ? { tag: body.tag_name, url: body.html_url } : { tag: null, url: null }
+  }
+  const r = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=20`, API)
+  const list = r.ok ? await r.json() : []
+  let best = { tag: null, url: null }
+  for (const x of Array.isArray(list) ? list : []) {
+    if (!x.draft && parseVersion(x.tag_name) && (!best.tag || newer(x.tag_name, best.tag)))
+      best = { tag: x.tag_name, url: x.html_url }
+  }
+  return best
+}
 async function latestRelease() {
   const { release } = await chrome.storage.local.get({ release: null })
-  if (release && Date.now() - release.at < 6 * 3600 * 1000)
+  // the cache answers the same question only: a candidate and a release ask for different lists
+  if (release && release.testing === testing && Date.now() - release.at < 6 * 3600 * 1000)
     return release
-  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
-  const body = r.ok ? await r.json() : null
-  const next = { at: Date.now(), tag: body ? body.tag_name : null, url: body ? body.html_url : null }
+  const next = { at: Date.now(), testing, ...await fetchNewest() }
   await chrome.storage.local.set({ release: next })
   return next
 }
 latestRelease().then((release) => {
-  const tag = release.tag && release.tag.replace(/^v/, '')
-  if (!tag || !newer(tag, current))
+  if (!release.tag || !newer(release.tag, current))
     return
+  const tag = release.tag.replace(/^v/, '')
   const el = $('update')
-  el.innerHTML = `새 버전 <b>v${escape(tag)}</b>이 있습니다. <a id="get">받으러 가기</a>`
+  el.innerHTML = `새 ${tag.includes('-') ? '시험판이' : '버전이'} 나왔습니다: <b>v${escape(tag)}</b> <a id="get">받으러 가기</a>`
   el.hidden = false
   $('get').addEventListener('click', () => chrome.tabs.create({ url: release.url }))
 }, () => {})
