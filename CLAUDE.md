@@ -20,6 +20,8 @@
 - 원격 push·PR·태그는 사용자가 그때그때 말할 때만.
 - 머지 뒤: `git switch main && git pull --ff-only`, 그리고 `develop` 을 `main` 으로 fast-forward.
 - 릴리스 태그 `v<버전>` 은 `main` 에서, `manifest.json` 의 `version` 과 같게. 태그 푸시 → `release.yml` 이 초안 릴리스를 만든다.
+- 시험판은 `develop` 에서 `vX.Y.Z-rc.N` 태그(→ 프리릴리스). `version` 은 `X.Y.Z.N`, `version_name` 은 `X.Y.Z-rc.N`
+  (`scripts/version.js`, README "개발" 절 표). 정식으로 낼 때 `version_name` 을 지운다.
 
 ## 커밋
 

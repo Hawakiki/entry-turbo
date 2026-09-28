@@ -110,6 +110,17 @@ pnpm release       # dist/ → release/entry-turbo-v<버전>.zip + .sha256 (같�
 팝업은 열릴 때 GitHub API 로 최신 릴리스 번호를 확인해 새 버전을 알린다(6시간마다 한 번). `manifest.json` 의 `key` 는
 확장 ID 를 고정한다(어느 폴더에 풀어도 같은 확장).
 
+시험판(rc): 크롬의 `version` 은 숫자만 받으므로 rc 번호를 넷째 자리에 두고, 보이는 이름은 `version_name` 에 둔다
+(규칙은 `scripts/version.js`, 어긋나면 빌드가 멈춘다).
+
+| 판         | `version` | `version_name` | 태그          | GitHub 릴리스 |
+| ---------- | --------- | -------------- | ------------- | ------------- |
+| 0.3.0 rc 1 | `0.3.0.1` | `0.3.0-rc.1`   | `v0.3.0-rc.1` | 프리릴리스    |
+| 0.3.0 정식 | `0.3.0`   | (없음)         | `v0.3.0`      | 일반          |
+
+rc 태그는 `develop` 에서, 정식은 `version_name` 을 지우고 `main` 에 머지한 뒤 `main` 에서. 정식 사용자는 `releases/latest`
+(프리릴리스 제외)만 보므로 rc 알림을 받지 않고, rc 사용자는 더 새 rc 와 정식을 모두 알림받는다(`0.3.0-rc.N < 0.3.0`).
+
 ### 검증
 
 entry-test(공개하지 않은 별도 도구 모음: CDP·블록 DSL)를 쓴다. 이 저장소 옆 폴더 `../entry-test`, 또는 `ENTRY_TEST` 환경 변수.
