@@ -76,7 +76,7 @@ async function main() {
   for (const mode of MODES) {
     const r = await run(c, mode)
     results.push(r)
-    console.log(`${mode.padEnd(12)} 준비 ${r.ready === null ? '-' : `${r.ready.toFixed(1)}초`} · 프롬프트 ${r.prompt === null ? '안 돌아옴' : `${r.prompt.toFixed(1)}초`} · 콘솔 ${r.lines}줄 ${r.hash}${r.turbo ? ` · 컴파일 ${r.turbo.stats.compiled}/${r.turbo.stats.fallback} 함수 ${r.turbo.stats.functions} 엔진 ${r.turbo.engine.coreKnown ? '확인됨' : '모름'} ${JSON.stringify(r.turbo.stats.reasons)}` : ''}`)
+    console.log(`${mode.padEnd(12)} 준비 ${r.ready === null ? '-' : `${r.ready.toFixed(1)}초`} · 프롬프트 ${r.prompt === null ? '안 돌아옴' : `${r.prompt.toFixed(1)}초`} · 콘솔 ${r.lines}줄 ${r.hash}${r.turbo ? ` · 컴파일 ${r.turbo.stats.compiled}/${r.turbo.stats.fallback} 함수 ${r.turbo.stats.functions} 재귀 ${r.turbo.stats.recursive ?? 0}(최대 깊이 ${r.turbo.stats.maxDepth ?? 0}) 엔진 ${r.turbo.engine.coreKnown ? '확인됨' : '모름'} ${JSON.stringify(r.turbo.stats.reasons)}` : ''}`)
     console.log(`             끝 줄 ${JSON.stringify(r.last)}`)
   }
   const hashes = new Set(results.filter(r => r.prompt !== null).map(r => r.hash))

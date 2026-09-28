@@ -29,10 +29,10 @@
   /** @type {EntrySmooth | null} (src/smooth.js) */
   let smooth = null
   /** @type {TurboSettings} (src/bridge.js) */
-  let wanted = { enabled: true, compile: true, deferViews: true, osd: true, smooth: false }
+  let wanted = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false }
   let applied = null
 
-  const key = () => JSON.stringify([wanted.enabled, wanted.compile, wanted.deferViews])
+  const key = () => JSON.stringify([wanted.enabled, wanted.compile, wanted.deferViews, wanted.deepRecursion])
   function apply() {
     if (osd)
       osd.show(Boolean(wanted.osd))
@@ -41,7 +41,7 @@
     if (!turbo || Entry.engine.state !== 'stop' || key() === applied)
       return
     if (wanted.enabled)
-      turbo.enable({ compile: wanted.compile, deferViews: wanted.deferViews })
+      turbo.enable({ compile: wanted.compile, deferViews: wanted.deferViews, deepRecursion: wanted.deepRecursion })
     else
       turbo.disable()
     applied = key()

@@ -19,12 +19,14 @@
 // installEntryTurbo() for the extension to call; exposes globalThis.EntryTurbo.
 
 /**
- * What EntryTurbo.enable() takes; a missing key takes its default (all true).
+ * What EntryTurbo.enable() takes; a missing key takes its default (true, except deepRecursion).
  * @typedef {object} TurboOptions
  * @property {boolean} [compile] Replace Executor#execute with compiled scripts (needs a checked core).
  * @property {boolean} [inline] Write checked value / statement blocks as JS instead of calling their func.
  * @property {boolean} [functions] Compile Entry functions; off calls them through Entry's own path.
  * @property {boolean} [deferViews] Replace Variable#setValue with the once-per-tick view update.
+ * @property {boolean} [deepRecursion] Experimental: let recursive functions go RECURSION_DEEP calls deep instead of
+ *   RECURSION_LIMIT (Entry itself stops at a few thousand, where the browser's stack runs out).
  */
 /**
  * Counts since the last reset (every run from stop).
@@ -35,6 +37,9 @@
  * @property {number} functions Entry functions compiled.
  * @property {number} generators Of those, the ones that can yield (generator functions).
  * @property {number} functionFallback Call sites that go through Entry's own function path.
+ * @property {number} recursive Compiled functions that call themselves (directly or around a cycle): run on a stack of
+ *   their own instead of the browser's.
+ * @property {number} maxDepth The deepest such recursion reached.
  * @property {Record<string, number>} reasons Why a script or call was not compiled -> how many times.
  */
 /**
@@ -204,10 +209,15 @@ function installEntryTurbo() {
   const LIST_FIELD = { value_of_index_from_list: 1, length_of_list: 1, change_value_list_index: 0, add_value_to_list: 1, remove_value_from_list: 1 }
 
   /** @type {Required<TurboOptions>} */
-  const DEFAULTS = { compile: true, inline: true, functions: true, deferViews: true }
+  const DEFAULTS = { compile: true, inline: true, functions: true, deferViews: true, deepRecursion: false }
   const options = { ...DEFAULTS }
+  // How deep a recursive compiled function may go. Entry's own recursion ends where the browser's stack does, a few
+  // thousand calls (1,500-3,500 in V8, depending on the function); the default stays well above that, so a project
+  // never stops earlier than in Entry, and still stops on runaway recursion instead of eating memory.
+  const RECURSION_LIMIT = 10_000
+  const RECURSION_DEEP = 1_000_000
   /** @returns {TurboStats} all counts at zero */
-  const newStats = () => ({ compiled: 0, fallback: 0, started: 0, functions: 0, generators: 0, functionFallback: 0, reasons: {} })
+  const newStats = () => ({ compiled: 0, fallback: 0, started: 0, functions: 0, generators: 0, functionFallback: 0, recursive: 0, maxDepth: 0, reasons: {} })
   const stats = newStats()
   const note = (reason) => {
     stats.reasons[reason] = (stats.reasons[reason] || 0) + 1
@@ -526,6 +536,71 @@ function installEntryTurbo() {
     }
   }
 
+  // ── recursion on a stack of our own ──
+  // A compiled function that can call itself (around any cycle of calls) is a generator whose calls into its own cycle
+  // are not JS calls: it yields tcall(callee generator, again) and a driver runs the callee on an array stack, sending
+  // its return value back into the yield. The browser's stack stays flat however deep the recursion goes; everything
+  // else is the same as the nested JS calls it replaces:
+  // - a real yield (bare `yield`, the end of the frame) passes out of the driver; on the resume, before the innermost
+  //   function goes on, each call on the stack evaluates its arguments again, outermost first (again), the order the
+  //   nested `while (!$g.next().done) { yield; again }` loops of plain call sites give;
+  // - an error ends every function on the stack, like a JS exception through the nested calls; it is marked as coming
+  //   from inside a function (see fail());
+  // - past the depth limit it throws the RangeError a JS stack overflow would.
+  const tcall = (g, again) => ({ $turboCall: g, again })
+  function overflow() {
+    const e = new RangeError('Maximum call stack size exceeded')
+    e.$turboInFunction = true
+    return e
+  }
+  function* run(first) {
+    const stack = [first]
+    const agains = [null]
+    const limit = options.deepRecursion ? RECURSION_DEEP : RECURSION_LIMIT
+    let send
+    try {
+      for (;;) {
+        const r = stack.at(-1).next(send)
+        send = undefined
+        if (r.done) {
+          stack.pop()
+          agains.pop()
+          if (!stack.length)
+            return r.value
+          send = r.value
+        }
+        else if (r.value && r.value.$turboCall) {
+          if (stack.length >= limit)
+            throw overflow()
+          stack.push(r.value.$turboCall)
+          agains.push(r.value.again)
+          if (stack.length > stats.maxDepth)
+            stats.maxDepth = stack.length
+        }
+        else {
+          yield
+          for (let i = 1; i < stack.length; i++) {
+            if (agains[i])
+              agains[i]()
+          }
+        }
+      }
+    }
+    catch (e) {
+      if (e && typeof e === 'object')
+        e.$turboInFunction = true
+      throw e
+    }
+  }
+  // the driver for a function that never yields (all of its cycle ends in one pass): its return value
+  function runSync(first) {
+    const d = run(first)
+    const r = d.next()
+    if (!r.done)
+      throw new Error('turbo: a recursive function that never yields yielded')
+    return r.value
+  }
+
   const R = {
     num,
     bool,
@@ -566,6 +641,9 @@ function installEntryTurbo() {
     BREAK: STATIC.BREAK,
     weld,
     entryFunction,
+    tcall,
+    run,
+    runSync,
     repeatError: () => Lang.Blocks.FLOW_repeat_basic_errorMsg,
     variable: (id, ent) => Entry.variableContainer.getVariable(id, ent),
     list: (id, ent) => Entry.variableContainer.getList(id, ent),
@@ -575,9 +653,16 @@ function installEntryTurbo() {
   // ── compiler ──
   // c: { blocks, schemas, consts, vars, lists, loops, n, fn (a function body), yields (emitted a yield point) }
   // c.fn: the function being compiled (its plan record), null at the top level of a script. sites: statement calls,
-  // left as placeholders until the call graph is solved; valueCalls: callees of value calls; scene: a scene change;
-  // arity: parameters read (a0..); locals: local variables used (L0..).
-  const context = fn => ({ blocks: [], schemas: [], consts: [], vars: new Map(), lists: new Map(), loops: [], n: 0, fn, yields: false, sites: [], valueCalls: new Set(), scene: false, arity: 0, locals: new Map() })
+  // left as placeholders until the call graph is solved; valueCalls: callees of value calls (vsites: the value calls,
+  // placeholders too); scene: a scene change;
+  // arity: parameters read (a0..); locals: local variables used (L0..); temps: the scratch variables the body uses.
+  // Scratch variables are one set per function, declared once at its head ($s/$r/$w for a generic statement, $g for a
+  // call site, $c<depth> for a repeat counter), never one per statement: V8 does not share slots between sibling
+  // blocks, so per-statement declarations would grow every frame with the body and a recursive function would run
+  // out of stack long before Entry does (issue #4).
+  const context = fn => ({ blocks: [], schemas: [], consts: [], vars: new Map(), lists: new Map(), loops: [], n: 0, fn, yields: false, sites: [], valueCalls: new Set(), vsites: [], scene: false, arity: 0, locals: new Map(), temps: new Set() })
+  // the head of a compiled body: the running block's index and the scratch variables
+  const head = c => `let ${['$b = -1', ...c.temps].join(', ')};\n`
   const isBlock = p => p instanceof Entry.Block
   function field(b, i) {
     if (isBlock(b.params[i]))
@@ -1089,7 +1174,9 @@ function installEntryTurbo() {
     if (G.failed)
       throw new Unsupported(`value function: ${G.reason}`)
     c.valueCalls.add(G)
-    return `FT.${G.name}(ex, ent${p.params.map(q => `, ${expr(c, q)}`).join('')})`
+    // left as a placeholder like a statement call: how it is called depends on the solved call graph (renderValue)
+    c.vsites.push({ G, args: p.params.map(q => expr(c, q)) })
+    return `\u0002${c.vsites.length - 1}\u0002`
   }
 
   function expr(c, p) {
@@ -1188,9 +1275,12 @@ function installEntryTurbo() {
         const value = expr(c, b.params[0])
         // Entry evaluates the count again each time it re-enters the loop block; skip that when it cannot matter
         const reEntry = stable(b.params[0]) ? '' : `$b = ${k};\n${value};\n`
+        // one counter per nesting depth: loops at the same depth never run at the same time
+        const cv = `$c${c.loops.length}`
+        c.temps.add(cv)
         const body = loopBody(c, { label: `L${n}`, reEntry }, b, 0)
-        return s(`${at}let c${n} = num(${value});\nif (c${n} < 0) throw new Error(repeatError());\nc${n} = Math.floor(c${n});\n`
-          + `L${n}: while (c${n} !== 0 && !(c${n} < 0)) {\nc${n}--;\n${body}${reEntry}}\n`)
+        return s(`${at}${cv} = num(${value});\nif (${cv} < 0) throw new Error(repeatError());\n${cv} = Math.floor(${cv});\n`
+          + `L${n}: while (${cv} !== 0 && !(${cv} < 0)) {\n${cv}--;\n${body}${reEntry}}\n`)
       }
       case 'repeat_inf': {
         onlyBlocksAt(b, [1])
@@ -1202,7 +1292,7 @@ function installEntryTurbo() {
         const until = field(b, 1) === 'until'
         const cond = expr(c, b.params[0])
         const body = loopBody(c, { label: `L${n}`, reEntry: '' }, b, 0)
-        return s(`L${n}: while (true) {\n$b = ${k};\nconst w${n} = bool(${cond});\nif (!(${until ? `!w${n}` : `w${n}`})) break;\n${body}}\n`)
+        return s(`L${n}: while (true) {\n$b = ${k};\nif (${until ? '' : '!'}bool(${cond})) break;\n${body}}\n`)
       }
       case '_if': {
         onlyBlocksAt(b, [0])
@@ -1300,40 +1390,65 @@ function installEntryTurbo() {
     // Executor.execute's handling of a block's result, for one execution of this statement: the params are evaluated
     // again on every run, like Scope.run; a thrown AsyncError is a BREAK (yield, run again); die() (the scope loses its
     // block) ends the script, or the function
+    // $s/$r/$w are the function's scratch variables (see context): nothing between their uses here runs another
+    // statement of this body, only its argument expressions and yields
     c.yields = true
+    c.temps.add('$s').add('$r').add('$w')
     const a = args(c, b)
-    const sc = `s${n}`
-    const r = `r${n}`
-    return s(`${at}{\nconst ${sc} = new FastScope(B[${k}], schemaOf(B[${k}]), ex, null);\nfor (;;) {\nlet ${r};\n`
-      + `try {\n${r} = invoke(${sc}, ${a});\n} catch (e) {\nif (e && e.name === 'AsyncError') { yield; continue; }\nthrow e;\n}\n`
-      + `if (${sc}.block === null) return;\n`
-      + `if (${r} === undefined || ${r} === null || ${r} === PASS) break;\n`
-      + `if (${r} === ${sc} || ${r} === BREAK) { yield; continue; }\n`
-      + `if (${r} instanceof Promise) {\nconst w = pause(ex, ${r}, ${sc});\nwhile (!w.done) yield;\nif (w.error) throw w.error;\nif (w.again) continue;\nbreak;\n}\n`
-      + `}\n}\n${after}`)
+    return s(`${at}$s = new FastScope(B[${k}], schemaOf(B[${k}]), ex, null);\nfor (;;) {\n`
+      + `try {\n$r = invoke($s, ${a});\n} catch (e) {\nif (e && e.name === 'AsyncError') { yield; continue; }\nthrow e;\n}\n`
+      + `if ($s.block === null) return;\n`
+      + `if ($r === undefined || $r === null || $r === PASS) break;\n`
+      + `if ($r === $s || $r === BREAK) { yield; continue; }\n`
+      + `if ($r instanceof Promise) {\n$w = pause(ex, $r, $s);\nwhile (!$w.done) yield;\nif ($w.error) throw $w.error;\nif ($w.again) continue;\nbreak;\n}\n`
+      + `}\n${after}`)
   }
 
-  const errorWrap = body => `let $b = -1;\ntry {\n${body}} catch (e) {\n`
+  const errorWrap = (c, body) => `${head(c)}try {\n${body}} catch (e) {\n`
     + `if (e && typeof e === 'object' && !e.$turboBlock) e.$turboBlock = B[$b];\nthrow e;\n}\n`
   const guardOf = (name, kind) => (kind === 'list' ? `!${name} || ${name}.isRealTime_ || ${name}.isCloud_` : `!${name} || ${name}.isRealTime_`)
 
   // ── statement calls ──
   // Once its callee is solved, a call site becomes: a plain call when the callee never yields; `yield*` when it yields
   // and evaluating the arguments again cannot matter; otherwise a loop that yields and evaluates the arguments again
-  // before each resume, as Entry does; entryFunction when the callee is not compiled.
-  function renderCall(site) {
-    const { G, id, k, args: list, again, after } = site
+  // before each resume, as Entry does; entryFunction when the callee is not compiled. A recursive callee (see run) is
+  // a generator: from inside its own cycle the call goes on the driver's stack (tcall), from outside through a driver
+  // (run, or runSync when the cycle never yields).
+  const sameCycle = (c, G) => Boolean(c.fn && c.fn.rec && G.rec && G.scc === c.fn.scc)
+  function renderCall(c, site) {
+    const { G, id, k, after } = site
+    const list = site.args.map(x => render(c, x))
+    const again = render(c, site.again)
+    // the arguments evaluated again from a closure (entryFunction, the driver): no yield in there, see renderValue
+    const againFn = site.again ? `() => {\n${render(c, site.again, true)}}` : ''
     const a = list.length ? `, ${list.join(', ')}` : ''
     if (!G || G.failed)
-      return `yield* entryFunction(${JSON.stringify(id)}, ex, ent, B[${k}], [${list.join(', ')}]${again ? `, () => {\n${again}}` : ''});\n${after}`
+      return `yield* entryFunction(${JSON.stringify(id)}, ex, ent, B[${k}], [${list.join(', ')}]${againFn ? `, ${againFn}` : ''});\n${after}`
+    const callee = `FT.${G.name}(ex, ent${a})`
+    if (sameCycle(c, G))
+      return `yield tcall(${callee}, ${againFn || 'null'});\n${after}`
     if (!G.gen)
-      return `FT.${G.name}(ex, ent${a});\n${after}`
+      return `${G.rec ? `runSync(${callee})` : callee};\n${after}`
+    const g = G.rec ? `run(${callee})` : callee
     if (!again)
-      return `yield* FT.${G.name}(ex, ent${a});\n${after}`
-    return `{\nconst g = FT.${G.name}(ex, ent${a});\nwhile (!g.next().done) {\nyield;\n${again}}\n}\n${after}`
+      return `yield* ${g};\n${after}`
+    // $g: the function's scratch variable for a call site (see context); only argument expressions run while it is live
+    c.temps.add('$g')
+    return `$g = ${g};\nwhile (!$g.next().done) {\nyield;\n${again}}\n${after}`
   }
-  // eslint-disable-next-line no-control-regex -- the placeholder statement() leaves for a call site
-  const render = (c, code) => code.replace(/\u0001(\d+)\u0001/g, (_, i) => renderCall(c.sites[Number(i)]))
+  // a value call: its callee never yields (solve() fails it otherwise), so a recursive one ends in one pass. Inside a
+  // closure (inClosure: arguments evaluated again, see renderCall) a call into the own cycle cannot yield to the driver
+  // and gets a driver of its own; the same calls happen in the same order.
+  function renderValue(c, site, inClosure) {
+    const callee = `FT.${site.G.name}(ex, ent${site.args.map(x => `, ${render(c, x, inClosure)}`).join('')})`
+    if (sameCycle(c, site.G) && !inClosure)
+      return `(yield tcall(${callee}, null))`
+    return site.G.rec ? `runSync(${callee})` : callee
+  }
+  function render(c, code, inClosure = false) {
+    // eslint-disable-next-line no-control-regex -- the placeholders statement() and valueCall() leave for calls
+    return code.replace(/\u0001(\d+)\u0001|\u0002(\d+)\u0002/g, (_, i, j) => (i === undefined ? renderValue(c, c.vsites[Number(j)], inClosure) : renderCall(c, c.sites[Number(i)])))
+  }
 
   // ── functions: plan, solve, link (ref/functions-spec.md §9.2) ──
   // plan() compiles a function's body once, its statement calls left as placeholders, and records what it needs.
@@ -1354,7 +1469,7 @@ function installEntryTurbo() {
     let F = fns.get(id)
     if (F)
       return F // planned, being planned (a cycle: nothing about it is needed yet) or linked
-    F = { id, kind, name: `f${fns.size}`, planning: true, failed: false, reason: '', linked: false, gen: false, scene: false, localYields: false, func: null, c: null, code: '', decl: '', objs: [], templates: [] }
+    F = { id, kind, name: `f${fns.size}`, planning: true, failed: false, reason: '', linked: false, gen: false, scene: false, localYields: false, scc: null, rec: false, func: null, c: null, code: '', decl: '', objs: [], templates: [] }
     fns.set(id, F)
     try {
       const func = Entry.variableContainer.getFunction(id)
@@ -1440,20 +1555,81 @@ function installEntryTurbo() {
       }
     }
   }
+  // Which functions are recursive: the cycles of the call graph (Tarjan's strongly connected components, without JS
+  // recursion) among the functions about to be linked. A cycle's functions are all planned by the same compile, since
+  // planning one plans its callees, so they are linked together and never mix with ones linked before.
+  function cycles() {
+    const nodes = [...fns.values()].filter(F => !F.linked && !F.failed && !F.planning)
+    const inGraph = new Set(nodes)
+    const callees = F => [...F.c.sites.map(s => s.G), ...F.c.valueCalls].filter(G => G && inGraph.has(G))
+    const index = new Map()
+    const low = new Map()
+    const open = []
+    const onOpen = new Set()
+    const visit = (F, work) => {
+      index.set(F, index.size)
+      low.set(F, index.get(F))
+      open.push(F)
+      onOpen.add(F)
+      work.push({ F, out: callees(F), i: 0 })
+    }
+    for (const root of nodes) {
+      if (index.has(root))
+        continue
+      const work = []
+      visit(root, work)
+      while (work.length) {
+        const top = work.at(-1)
+        if (top.i < top.out.length) {
+          const G = top.out[top.i++]
+          if (!index.has(G))
+            visit(G, work)
+          else if (onOpen.has(G))
+            low.set(top.F, Math.min(low.get(top.F), index.get(G)))
+          continue
+        }
+        work.pop()
+        const F = top.F
+        if (work.length)
+          low.set(work.at(-1).F, Math.min(low.get(work.at(-1).F), low.get(F)))
+        if (low.get(F) !== index.get(F))
+          continue
+        const scc = []
+        let G
+        do {
+          G = open.pop()
+          onOpen.delete(G)
+          scc.push(G)
+        } while (G !== F)
+        const rec = scc.length > 1 || top.out.includes(F)
+        for (const H of scc) {
+          H.scc = scc
+          H.rec = rec
+        }
+      }
+    }
+  }
   function link() {
+    cycles()
     for (const F of fns.values()) {
       if (F.linked || F.failed || F.planning)
         continue
       const c = F.c
       const params = Array.from({ length: c.arity }, (_, i) => `, a${i}`).join('')
       const locals = [...c.locals].map(([i, name]) => `let ${name} = T[${i}].value;\n`).join('')
-      const src = `const { ${RUNTIME_NAMES} } = R;\n${F.decl}return function${F.gen ? '*' : ''} (ex, ent${params}) {\nlet $b = -1;\n${locals}${render(c, F.code)}};\n`
+      const body = render(c, F.code) // before head(c): rendering a call site may add $g
+      // an error from inside a function: Entry's function executor catches it first and reports a plain runtime error,
+      // never the recursive-call warning its top-level executor adds for a RangeError (Executor.execute), see fail()
+      const src = `const { ${RUNTIME_NAMES} } = R;\n${F.decl}return function${F.gen || F.rec ? '*' : ''} (ex, ent${params}) {\n${head(c)}${locals}`
+        + `try {\n${body}} catch (e) {\nif (e && typeof e === 'object') e.$turboInFunction = true;\nthrow e;\n}\n};\n`
       // eslint-disable-next-line no-new-func -- the whole point: blocks become JS
       FT[F.name] = new Function('R', 'B', 'S', 'K', 'FT', 'V', 'T', src)(R, c.blocks, c.schemas, c.consts, FT, F.objs, F.templates)
       F.linked = true
       stats.functions++
       if (F.gen)
         stats.generators++
+      if (F.rec)
+        stats.recursive++
     }
   }
 
@@ -1470,7 +1646,7 @@ function installEntryTurbo() {
     const guards = refs.map(([, name, kind]) => guardOf(name, kind))
     const src = `const { ${RUNTIME_NAMES} } = R;\nreturn function (ex, ent) {\n${decl}`
       + `${guards.length ? `if (${guards.join(' || ')}) return null;\n` : ''}`
-      + `return (function* () {\n${errorWrap(render(c, body))}})();\n};\n`
+      + `return (function* () {\n${errorWrap(c, render(c, body))}})();\n};\n`
     return { src, c }
   }
 
@@ -1547,7 +1723,7 @@ function installEntryTurbo() {
       Entry.Utils.stopProjectWithToast(ex.scope, 'IncompatibleError', e)
       return
     }
-    if (e && e.name === 'RangeError')
+    if (e && e.name === 'RangeError' && !e.$turboInFunction)
       Entry.toast.alert(Lang.Workspace.RecursiveCallWarningTitle, Lang.Workspace.RecursiveCallWarningContent)
     Entry.Utils.stopProjectWithToast(ex.scope, undefined, e)
   }
