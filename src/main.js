@@ -1,8 +1,8 @@
-/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth */
+/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth, installEntrySeed */
 // Extension, page side (MAIN world, every playentry.org frame). Waits for Entry in this frame, installs the compiler
 // and the on-screen display, follows the popup's settings (through bridge.js) and answers status requests.
 // Compiler settings change only while the project is stopped: switching the executor mid-run would restart compiled
-// scripts. The display switches at once.
+// scripts. The display switches at once; a seed is taken at the next start from stop.
 
 /**
  * The answer to the popup's status request (popup/popup.js renders it). Only `installed` is there before Entry is.
@@ -19,6 +19,8 @@
  * @property {boolean} [pending] Compiler switches changed and wait for the project to stop.
  * @property {TurboEngine} [engine] What an unchecked build switched off (src/turbo.js).
  * @property {TurboStats} [stats] Counts since the last run from stop (src/turbo.js).
+ * @property {{seed: number | null, active: boolean, shared: boolean} | null} [seed] The fixed seed (src/seed.js); null
+ *   when seed.js is missing.
  */
 
 (() => {
@@ -28,8 +30,10 @@
   let osd = null
   /** @type {EntrySmooth | null} (src/smooth.js) */
   let smooth = null
+  /** @type {EntrySeed | null} (src/seed.js) */
+  let seed = null
   /** @type {TurboSettings} (src/bridge.js) */
-  let wanted = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false }
+  let wanted = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, seedOn: false, seed: 1 }
   let applied = null
 
   const key = () => JSON.stringify([wanted.enabled, wanted.compile, wanted.deferViews, wanted.deepRecursion])
@@ -38,6 +42,8 @@
       osd.show(Boolean(wanted.osd))
     if (smooth)
       smooth.set(Boolean(wanted.smooth))
+    if (seed)
+      seed.set(wanted.seedOn ? wanted.seed : null)
     if (!turbo || Entry.engine.state !== 'stop' || key() === applied)
       return
     if (wanted.enabled)
@@ -55,6 +61,8 @@
       if (this.state === 'stop') {
         apply()
         turbo.reset()
+        if (seed)
+          seed.restart()
       }
       return toggleRun.apply(this, args)
     }
@@ -73,6 +81,7 @@
       compiling: turbo.compiling,
       deferring: turbo.deferring,
       smooth: smooth ? { on: smooth.on, supported: smooth.supported } : null,
+      seed: seed ? { seed: seed.seed, active: seed.active, shared: seed.shared } : null,
       wanted,
       pending: key() !== applied,
       engine: turbo.engine(),
@@ -105,6 +114,7 @@
     osd = typeof installEntryOsd === 'function' ? installEntryOsd() : null
     smooth = typeof installEntrySmooth === 'function' ? installEntrySmooth() : null
     globalThis.EntrySmooth = smooth
+    seed = typeof installEntrySeed === 'function' ? installEntrySeed() : null
     hookRun()
     window.postMessage({ source: PAGE, type: 'ready' }, '*')
     apply()

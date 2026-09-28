@@ -11,13 +11,15 @@
  *   while stopped).
  * @property {boolean} osd Show the on-screen display (applied at once).
  * @property {boolean} smooth Draw between ticks at the monitor's rate (applied at once).
+ * @property {boolean} seedOn Experimental: the project's randomness follows seed (from the next start from stop).
+ * @property {number} seed The fixed seed, 0 to 4294967295.
  */
 
 (() => {
   const PAGE = 'entry-turbo-page'
   const BRIDGE = 'entry-turbo-bridge'
   /** @type {TurboSettings} */
-  const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false }
+  const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, seedOn: false, seed: 1 }
   const waiting = new Map()
   let pageReady = false
 

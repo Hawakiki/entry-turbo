@@ -49,6 +49,27 @@
       <p class="muted">이 탭을 확인하는 중…</p>
     </section>
 
+    <section class="switches tools">
+      <h2>도구 (실험)</h2>
+      <div class="opt">
+        <label
+          ><input type="checkbox" id="seedOn" /> 무작위 시드 고정
+          <span class="info" tabindex="0" aria-label="시드 고정이란">ⓘ</span></label
+        >
+        <p class="tip">
+          <b>시드 고정</b>: 작품의 무작위 값(무작위 수, 리스트의 무작위 항목 등)이 실행할 때마다 똑같이 나옵니다. 같은
+          판 다시 보기, 버그 재현에 씁니다. 시작할 때마다 처음부터 다시 나옵니다.<br />
+          입력 타이밍이나 "초 기다리기"에 따라 스크립트 순서가 바뀌는 작품은 시드가 같아도 달라질 수 있습니다. 공유
+          변수를 쓰는 작품(순위표 등)에서는 저절로 꺼집니다.
+        </p>
+        <div class="seed">
+          <input type="number" id="seed" min="0" max="4294967295" step="1" />
+          <button type="button" id="newSeed">새 시드</button>
+        </div>
+      </div>
+      <p class="note">시드는 다음 시작부터 적용됩니다.</p>
+    </section>
+
     <script src="popup.js"></script>
   </body>
 </html>

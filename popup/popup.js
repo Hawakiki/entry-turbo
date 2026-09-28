@@ -1,25 +1,45 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
 /** @type {TurboSettings} (src/bridge.js) */
-const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false }
-const KEYS = Object.keys(DEFAULTS)
+const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, seedOn: false, seed: 1 }
+// the checkboxes; seed is a number box of its own
+const SWITCHES = Object.keys(DEFAULTS).filter(k => typeof DEFAULTS[k] === 'boolean')
 const $ = id => document.getElementById(id)
+const SEED_MAX = 4294967295
+let savedSeed = DEFAULTS.seed
 
 chrome.storage.local.get(DEFAULTS, (settings) => {
-  for (const k of KEYS)
+  for (const k of SWITCHES)
     $(k).checked = settings[k]
+  savedSeed = settings.seed
+  $('seed').value = settings.seed
   syncSubs()
 })
-for (const k of KEYS) {
+for (const k of SWITCHES) {
   $(k).addEventListener('change', () => {
     chrome.storage.local.set({ [k]: $(k).checked })
     syncSubs()
   })
 }
+// a whole number 0 .. 2^32 - 1; anything else puts the last good seed back
+function saveSeed(value) {
+  const n = Number(value)
+  if (value === '' || !Number.isInteger(n) || n < 0 || n > SEED_MAX) {
+    $('seed').value = savedSeed
+    return
+  }
+  savedSeed = n
+  $('seed').value = n
+  chrome.storage.local.set({ seed: n })
+}
+$('seed').addEventListener('change', () => saveSeed($('seed').value))
+$('newSeed').addEventListener('click', () => saveSeed(crypto.getRandomValues(new Uint32Array(1))[0]))
 function syncSubs() {
   for (const k of ['compile', 'deferViews'])
     $(k).disabled = !$('enabled').checked
   $('deepRecursion').disabled = !$('enabled').checked || !$('compile').checked
+  $('seed').disabled = !$('seedOn').checked
+  $('newSeed').disabled = !$('seedOn').checked
 }
 
 function escape(s) {
@@ -42,6 +62,13 @@ function render(st) {
     html += row('', '<span class="warn">이 작품은 WebGL로 그려서 보간을 못 합니다</span>')
   if (st.pending)
     html += row('', '<span class="warn">바꾼 설정은 멈추면 적용됩니다</span>')
+  if (st.seed && st.wanted && st.wanted.seedOn && st.seed.seed !== null) {
+    const s = st.seed
+    const seedText = s.shared
+      ? '<span class="warn">공유 변수를 쓰는 작품이라 꺼짐</span>'
+      : st.state === 'stop' || !s.active ? `시작하면 ${s.seed}` : `<span class="ok">${s.seed} 적용 중</span>`
+    html += row('시드', seedText)
+  }
   html += row('엔진', st.engine.coreKnown ? '<span class="ok">확인된 버전</span>' : '<span class="warn">확인 안 된 버전: 컴파일 꺼짐</span>')
   if (unknown.length)
     html += row('', `<span class="warn">확인 안 된 블록 ${unknown.length}개는 원래 방식</span>`)

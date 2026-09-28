@@ -18,6 +18,9 @@
 }
 body {
   width: 320px;
+  /* a popup is at most 600px tall: past that the page scrolls with the wheel */
+  max-height: 576px;
+  overflow-y: auto;
   margin: 0;
   padding: 12px 14px;
   background: var(--bg);
@@ -121,4 +124,36 @@ code {
 .opt:has(.info:hover) .tip,
 .opt:has(.info:focus) .tip {
   display: block;
+}
+h2 {
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+.seed {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 0 18px;
+}
+.seed input {
+  width: 110px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.seed button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.seed input:disabled,
+.seed button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
