@@ -39,18 +39,19 @@
       pageReady = true
       push()
     }
-    else if (e.data.type === 'status' && waiting.has(e.data.id)) {
-      waiting.get(e.data.id)(e.data.status)
+    // an answer to the popup: the status, or a tool's report (statistics, checks)
+    else if ((e.data.type === 'status' || e.data.type === 'report') && waiting.has(e.data.id)) {
+      waiting.get(e.data.id)(e.data.type === 'status' ? e.data.status : e.data.report)
       waiting.delete(e.data.id)
     }
   })
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (message.type !== 'status' || !pageReady)
+    if ((message.type !== 'status' && message.type !== 'report') || !pageReady)
       return false
     const id = Math.random().toString(36).slice(2)
     waiting.set(id, respond)
-    window.postMessage({ source: BRIDGE, type: 'status', id }, '*')
+    window.postMessage({ source: BRIDGE, type: message.type, kind: message.kind, id }, '*')
     return true
   })
 })()

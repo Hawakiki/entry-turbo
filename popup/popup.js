@@ -168,3 +168,54 @@ latestRelease().then((release) => {
   el.hidden = false
   $('get').addEventListener('click', () => chrome.tabs.create({ url: release.url }))
 }, () => {})
+
+// ── tools: project statistics and checks (src/inspect.js in the page) ──
+function showTool(html) {
+  const el = $('toolResult')
+  el.innerHTML = html
+  el.hidden = false
+}
+function renderStats(s) {
+  let html = '<table>'
+  html += row('장면 · 오브젝트', `${s.scenes} · ${s.objects}`)
+  html += row('블록', s.blocks.toLocaleString())
+  html += row('함수', `${s.functions}`)
+  html += row('변수 · 리스트', `${s.variables} · ${s.lists} (${s.listItems.toLocaleString()}칸)`)
+  html += row('신호', `${s.messages}`)
+  html += row('모양 · 소리', `${s.pictures} · ${s.sounds}`)
+  if (s.turbo)
+    html += row('터보', `스크립트 ${s.turbo.compiled}개 컴파일 · 원래 방식 ${s.turbo.fallback} · 함수 ${s.turbo.functions} (${s.turbo.ms}ms)`)
+  html += '</table>'
+  const list = (title, items) => (items.length ? `<p class="muted">${title}</p><ul>${items.map(x => `<li>${escape(x.name)} <span class="where">${x.blocks.toLocaleString()}블록</span></li>`).join('')}</ul>` : '')
+  html += list('블록이 많은 오브젝트', s.topObjects)
+  html += list('블록이 많은 함수', s.topFunctions)
+  return html
+}
+function renderFindings(findings) {
+  if (!findings.length)
+    return '<span class="ok">찾은 문제가 없습니다.</span>'
+  const order = { warn: 0, info: 1 }
+  return `<ul>${[...findings].sort((a, b) => order[a.level] - order[b.level]).map(f => `<li><span class="${f.level === 'warn' ? 'warn' : 'muted'}">${f.level === 'warn' ? '⚠' : 'ℹ'} <b>${escape(f.title)}</b> ${f.count}곳</span><br />${escape(f.detail)}<br /><span class="where">${f.where.map(escape).join(', ')}${f.count > f.where.length ? ' …' : ''}</span></li>`).join('')}</ul>`
+}
+async function runTool(kind) {
+  showTool('<span class="muted">읽는 중…</span>')
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab) {
+    showTool('<span class="warn">탭을 찾지 못했습니다.</span>')
+    return
+  }
+  chrome.tabs.sendMessage(tab.id, { type: 'report', kind }, (report) => {
+    if (chrome.runtime.lastError || !report) {
+      showTool('<span class="warn">이 탭에서 엔트리를 찾지 못했습니다.</span>')
+      return
+    }
+    if (report.error)
+      showTool(`<span class="warn">${escape(report.error)}</span>`)
+    else if (kind === 'stats')
+      showTool(renderStats(report.stats))
+    else
+      showTool(renderFindings(report.findings))
+  })
+}
+$('runStats').addEventListener('click', () => runTool('stats'))
+$('runCheck').addEventListener('click', () => runTool('check'))

@@ -21,6 +21,9 @@ body {
   /* a popup is at most 600px tall: past that the page scrolls with the wheel */
   max-height: 576px;
   overflow-y: auto;
+  /* the vertical scrollbar takes its width from the content, not a sideways scroll */
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   margin: 0;
   padding: 12px 14px;
   background: var(--bg);
@@ -156,4 +159,39 @@ h2 {
 .seed button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.tool-buttons {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+.tool-buttons button {
+  flex: 1;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.tool-buttons button:hover {
+  border-color: var(--accent);
+}
+.tool-result {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tool-result ul {
+  margin: 2px 0 0;
+}
+.tool-result li {
+  margin: 0 0 4px;
+}
+.tool-result .where {
+  color: var(--muted);
+  word-break: break-all;
 }

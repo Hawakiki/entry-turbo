@@ -1,4 +1,4 @@
-/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth, installEntrySeed */
+/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth, installEntrySeed, installEntryInspect */
 // Extension, page side (MAIN world, every playentry.org frame). Waits for Entry in this frame, installs the compiler
 // and the on-screen display, follows the popup's settings (through bridge.js) and answers status requests.
 // Compiler settings change only while the project is stopped: switching the executor mid-run would restart compiled
@@ -32,6 +32,8 @@
   let smooth = null
   /** @type {EntrySeed | null} (src/seed.js) */
   let seed = null
+  /** @type {{stats: () => InspectStats, check: () => InspectFinding[]} | null} (src/inspect.js) */
+  let inspect = null
   /** @type {TurboSettings} (src/bridge.js) */
   let wanted = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, seedOn: false, seed: 1 }
   let applied = null
@@ -99,6 +101,24 @@
     else if (e.data.type === 'status') {
       window.postMessage({ source: PAGE, type: 'status', id: e.data.id, status: status() }, '*')
     }
+    // a tool from the popup: statistics or checks of the loaded project
+    else if (e.data.type === 'report') {
+      let report
+      try {
+        if (!inspect)
+          report = { error: '이 탭에는 도구가 없습니다' }
+        else if (e.data.kind === 'stats')
+          report = { stats: inspect.stats() }
+        else if (e.data.kind === 'check')
+          report = { findings: inspect.check() }
+        else
+          report = { error: `모르는 도구: ${e.data.kind}` }
+      }
+      catch (err) {
+        report = { error: String((err && err.message) || err) }
+      }
+      window.postMessage({ source: PAGE, type: 'report', id: e.data.id, report }, '*')
+    }
   })
 
   const ready = () => window.Entry && Entry.stage && Entry.container && Entry.Executor && Entry.Variable && Entry.Scope && Entry.Code && Entry.block && Entry.engine && Entry.engine.toggleRun
@@ -115,6 +135,7 @@
     smooth = typeof installEntrySmooth === 'function' ? installEntrySmooth() : null
     globalThis.EntrySmooth = smooth
     seed = typeof installEntrySeed === 'function' ? installEntrySeed() : null
+    inspect = typeof installEntryInspect === 'function' ? installEntryInspect() : null
     hookRun()
     window.postMessage({ source: PAGE, type: 'ready' }, '*')
     apply()

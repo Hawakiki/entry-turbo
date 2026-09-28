@@ -21,6 +21,7 @@
         "src/osd.js",
         "src/smooth.js",
         "src/seed.js",
+        "src/inspect.js",
         "src/main.js"
       ],
       "world": "MAIN",
