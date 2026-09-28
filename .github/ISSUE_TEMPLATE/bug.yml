@@ -55,7 +55,7 @@ body:
     attributes:
       label: 확장 버전
       description: 팝업 제목 옆에 있어요
-      placeholder: v0.1.0
+      placeholder: v0.2.0
   - type: dropdown
     id: browser
     attributes:

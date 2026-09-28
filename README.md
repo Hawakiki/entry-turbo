@@ -65,9 +65,9 @@
 
 ```bash
 # 윈도우: 릴리스에 적힌 SHA-256 과 같은지
-certutil -hashfile entry-turbo-v0.1.0.zip SHA256
+certutil -hashfile entry-turbo-v<버전>.zip SHA256
 # GitHub CLI: 이 저장소의 Actions 가 만든 파일인지
-gh attestation verify entry-turbo-v0.1.0.zip -R Hawakiki/entry-turbo
+gh attestation verify entry-turbo-v<버전>.zip -R Hawakiki/entry-turbo
 ```
 
 ## 알아 둘 점
