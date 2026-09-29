@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import process from 'node:process'
 import { readReleaseVersion } from './version.js'
 
-const FILES = ['manifest.json', 'src/turbo.js', 'src/osd.js', 'src/smooth.js', 'src/hires.js', 'src/seed.js', 'src/inspect.js', 'src/main.js', 'src/bridge.js', 'popup/popup.html', 'popup/popup.css', 'popup/popup.js']
+const FILES = ['manifest.json', 'src/turbo.js', 'src/osd.js', 'src/smooth.js', 'src/hires.js', 'src/volume.js', 'src/seed.js', 'src/inspect.js', 'src/main.js', 'src/bridge.js', 'popup/popup.html', 'popup/popup.css', 'popup/popup.js']
 const root = new URL('../', import.meta.url)
 const dist = new URL('dist/', root)
 // checked first: a manifest whose version and version_name disagree is not built

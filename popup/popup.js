@@ -1,8 +1,8 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
 /** @type {TurboSettings} (src/bridge.js) */
-const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, hires: false, hiresMax: 'fit', seedOn: false, seed: 1 }
-// the checkboxes; seed is a number box and hiresMax a list of their own
+const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, hires: false, hiresMax: 'fit', volume: 100, volumeLimit: false, seedOn: false, seed: 1 }
+// the checkboxes; seed is a number box, hiresMax a list and volume a slider of their own
 const SWITCHES = Object.keys(DEFAULTS).filter(k => typeof DEFAULTS[k] === 'boolean')
 const $ = id => document.getElementById(id)
 const SEED_MAX = 4294967295
@@ -14,8 +14,15 @@ chrome.storage.local.get(DEFAULTS, (settings) => {
   savedSeed = settings.seed
   $('seed').value = settings.seed
   $('hiresMax').value = settings.hiresMax
+  $('volume').value = settings.volume
+  $('volumeValue').textContent = `${settings.volume}%`
   syncSubs()
 })
+// shown while dragging, saved when let go
+$('volume').addEventListener('input', () => {
+  $('volumeValue').textContent = `${$('volume').value}%`
+})
+$('volume').addEventListener('change', () => chrome.storage.local.set({ volume: Number($('volume').value) }))
 for (const k of SWITCHES) {
   $(k).addEventListener('change', () => {
     chrome.storage.local.set({ [k]: $(k).checked })
@@ -71,6 +78,13 @@ function render(st) {
       ? '<span class="warn">이 화면에서는 안 됩니다 (만들기 화면 · WebGL 작품)</span>'
       : h.scale > 1 ? `<span class="ok">${h.size[0]}×${h.size[1]} (${h.scale.toFixed(2)}배)</span>` : '원래 해상도 (화면이 작거나 입력칸이 떠 있음)'
     html += row('고해상도', text)
+  }
+  if (st.volume && st.wanted && (st.wanted.volume !== 100 || st.wanted.volumeLimit)) {
+    const v = st.volume
+    const text = !v.supported
+      ? '<span class="warn">이 작품은 소리 크기를 바꿀 수 없습니다</span>'
+      : `${Math.round(v.level * 100)}%${st.wanted.volumeLimit ? ` · 자동 줄임 ${v.reduction < -0.5 ? `${v.reduction.toFixed(1)}dB` : '없음'}` : ''}`
+    html += row('소리', text)
   }
   if (st.seed && st.wanted && st.wanted.seedOn && st.seed.seed !== null) {
     const s = st.seed

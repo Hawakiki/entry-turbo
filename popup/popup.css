@@ -206,3 +206,17 @@ h2 {
 .seed select:disabled {
   opacity: 0.5;
 }
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+.volume input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.volume #volumeValue {
+  width: 34px;
+  text-align: right;
+}

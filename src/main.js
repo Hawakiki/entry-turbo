@@ -1,4 +1,4 @@
-/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth, installEntrySeed, installEntryInspect, installEntryHires */
+/* global Entry, installEntryTurbo, installEntryOsd, installEntrySmooth, installEntrySeed, installEntryInspect, installEntryHires, installEntryVolume */
 // Extension, page side (MAIN world, every playentry.org frame). Waits for Entry in this frame, installs the compiler
 // and the on-screen display, follows the popup's settings (through bridge.js) and answers status requests.
 // Compiler settings change only while the project is stopped: switching the executor mid-run would restart compiled
@@ -16,6 +16,7 @@
  * @property {boolean} [deferring] Variable views are deferred (EntryTurbo.deferring).
  * @property {{on: boolean, supported: boolean} | null} [smooth] Smooth drawing; null when smooth.js is missing.
  * @property {{on: boolean, supported: boolean, scale: number, size: number[]} | null} [hires] Sharper stage (src/hires.js).
+ * @property {{supported: boolean, level: number, reduction: number} | null} [volume] Master volume (src/volume.js).
  * @property {TurboSettings} [wanted] The switches as last received from bridge.js.
  * @property {boolean} [pending] Compiler switches changed and wait for the project to stop.
  * @property {TurboEngine} [engine] What an unchecked build switched off (src/turbo.js).
@@ -35,10 +36,12 @@
   let seed = null
   /** @type {EntryHires | null} (src/hires.js) */
   let hires = null
+  /** @type {EntryVolume | null} (src/volume.js) */
+  let volume = null
   /** @type {{stats: () => InspectStats, check: () => InspectFinding[]} | null} (src/inspect.js) */
   let inspect = null
   /** @type {TurboSettings} (src/bridge.js) */
-  let wanted = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, hires: false, hiresMax: 'fit', seedOn: false, seed: 1 }
+  let wanted = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, hires: false, hiresMax: 'fit', volume: 100, volumeLimit: false, seedOn: false, seed: 1 }
   let applied = null
 
   const key = () => JSON.stringify([wanted.enabled, wanted.compile, wanted.deferViews, wanted.deepRecursion])
@@ -51,6 +54,8 @@
       seed.set(wanted.seedOn ? wanted.seed : null)
     if (hires)
       hires.set(Boolean(wanted.hires), wanted.hiresMax)
+    if (volume)
+      volume.set(wanted.volume, wanted.volumeLimit)
     if (!turbo || Entry.engine.state !== 'stop' || key() === applied)
       return
     if (wanted.enabled)
@@ -90,6 +95,7 @@
       smooth: smooth ? { on: smooth.on, supported: smooth.supported } : null,
       seed: seed ? { seed: seed.seed, active: seed.active, shared: seed.shared } : null,
       hires: hires ? { on: hires.on, supported: hires.supported, scale: hires.scale, size: hires.size } : null,
+      volume: volume ? { supported: volume.supported, level: volume.level, reduction: volume.reduction } : null,
       wanted,
       pending: key() !== applied,
       engine: turbo.engine(),
@@ -143,6 +149,7 @@
     seed = typeof installEntrySeed === 'function' ? installEntrySeed() : null
     inspect = typeof installEntryInspect === 'function' ? installEntryInspect() : null
     hires = typeof installEntryHires === 'function' ? installEntryHires() : null
+    volume = typeof installEntryVolume === 'function' ? installEntryVolume() : null
     hookRun()
     window.postMessage({ source: PAGE, type: 'ready' }, '*')
     apply()

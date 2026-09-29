@@ -77,6 +77,21 @@
       </div>
       <div id="toolResult" class="tool-result" hidden></div>
       <div class="opt">
+        <div class="volume">
+          <span>소리 크기</span>
+          <input type="range" id="volume" min="0" max="100" step="5" />
+          <span id="volumeValue" class="muted"></span>
+          <span class="info" tabindex="0" aria-label="소리 크기란">ⓘ</span>
+        </div>
+        <p class="tip">
+          <b>소리 크기</b>: 작품 소리 전체의 크기입니다. 작품 안의 "소리 크기" 값은 바뀌지 않고, 스피커로 나가는 소리만
+          줄어듭니다.<br />
+          <b>큰 소리 자동으로 줄이기</b>: 소리가 기준보다 크면 부드럽게 줄이고, 작은 소리는 키우지 않습니다. 작품마다
+          너무 큰 소리를 비슷한 크기로 맞춥니다.
+        </p>
+        <label class="sub"><input type="checkbox" id="volumeLimit" /> 큰 소리 자동으로 줄이기</label>
+      </div>
+      <div class="opt">
         <label
           ><input type="checkbox" id="seedOn" /> 무작위 시드 고정
           <span class="info" tabindex="0" aria-label="시드 고정이란">ⓘ</span></label

@@ -22,6 +22,7 @@
         "src/osd.js",
         "src/smooth.js",
         "src/hires.js",
+        "src/volume.js",
         "src/seed.js",
         "src/inspect.js",
         "src/main.js"
