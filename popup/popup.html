@@ -42,7 +42,27 @@
           채우지 않습니다. 오브젝트가 많은 작품은 조금 무거워질 수 있습니다.
         </p>
       </div>
-      <p class="note">속도계와 보간은 켜고 끄면 바로 적용됩니다.</p>
+      <div class="opt">
+        <label
+          ><input type="checkbox" id="hires" /> 선명하게 (고해상도, 실험)
+          <span class="info" tabindex="0" aria-label="고해상도란">ⓘ</span></label
+        >
+        <p class="tip">
+          <b>고해상도</b>: 엔트리는 무대를 640×360 으로 그린 뒤 늘려서 보여 줘서, 큰 화면이나 전체화면에서 흐릿합니다.
+          켜면 화면에 보이는 크기만큼 픽셀을 써서 그립니다(전체화면 FHD 모니터면 1920×1080). 블록 실행 결과·충돌
+          판정·마우스 좌표는 그대로입니다.<br />
+          화면이 클수록 그리기가 무거워지니, 느리면 최대 해상도를 낮추세요. 작품 페이지에서만, WebGL 작품은 안 됩니다.
+          묻고 기다리기 입력칸이 떠 있는 동안은 원래 해상도로 돌아갑니다.
+        </p>
+        <div class="seed">
+          <select id="hiresMax">
+            <option value="fit">화면에 맞춤 (최대 4K)</option>
+            <option value="qhd">최대 QHD (2560)</option>
+            <option value="fhd">최대 FHD (1920)</option>
+          </select>
+        </div>
+      </div>
+      <p class="note">속도계, 보간, 고해상도는 켜고 끄면 바로 적용됩니다.</p>
     </section>
 
     <section id="status">

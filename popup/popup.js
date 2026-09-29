@@ -1,8 +1,8 @@
 // Popup: the switches (chrome.storage, read by bridge.js in each playentry.org frame) and what the active tab's
 // Entry is doing, refreshed every second.
 /** @type {TurboSettings} (src/bridge.js) */
-const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, seedOn: false, seed: 1 }
-// the checkboxes; seed is a number box of its own
+const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion: false, osd: true, smooth: false, hires: false, hiresMax: 'fit', seedOn: false, seed: 1 }
+// the checkboxes; seed is a number box and hiresMax a list of their own
 const SWITCHES = Object.keys(DEFAULTS).filter(k => typeof DEFAULTS[k] === 'boolean')
 const $ = id => document.getElementById(id)
 const SEED_MAX = 4294967295
@@ -13,6 +13,7 @@ chrome.storage.local.get(DEFAULTS, (settings) => {
     $(k).checked = settings[k]
   savedSeed = settings.seed
   $('seed').value = settings.seed
+  $('hiresMax').value = settings.hiresMax
   syncSubs()
 })
 for (const k of SWITCHES) {
@@ -34,12 +35,14 @@ function saveSeed(value) {
 }
 $('seed').addEventListener('change', () => saveSeed($('seed').value))
 $('newSeed').addEventListener('click', () => saveSeed(crypto.getRandomValues(new Uint32Array(1))[0]))
+$('hiresMax').addEventListener('change', () => chrome.storage.local.set({ hiresMax: $('hiresMax').value }))
 function syncSubs() {
   for (const k of ['compile', 'deferViews'])
     $(k).disabled = !$('enabled').checked
   $('deepRecursion').disabled = !$('enabled').checked || !$('compile').checked
   $('seed').disabled = !$('seedOn').checked
   $('newSeed').disabled = !$('seedOn').checked
+  $('hiresMax').disabled = !$('hires').checked
 }
 
 function escape(s) {
@@ -62,6 +65,13 @@ function render(st) {
     html += row('', '<span class="warn">이 작품은 WebGL로 그려서 보간을 못 합니다</span>')
   if (st.pending)
     html += row('', '<span class="warn">바꾼 설정은 멈추면 적용됩니다</span>')
+  if (st.hires && st.wanted && st.wanted.hires) {
+    const h = st.hires
+    const text = !h.supported
+      ? '<span class="warn">이 화면에서는 안 됩니다 (만들기 화면 · WebGL 작품)</span>'
+      : h.scale > 1 ? `<span class="ok">${h.size[0]}×${h.size[1]} (${h.scale.toFixed(2)}배)</span>` : '원래 해상도 (화면이 작거나 입력칸이 떠 있음)'
+    html += row('고해상도', text)
+  }
   if (st.seed && st.wanted && st.wanted.seedOn && st.seed.seed !== null) {
     const s = st.seed
     const seedText = s.shared

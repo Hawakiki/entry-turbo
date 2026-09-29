@@ -21,6 +21,7 @@
         "src/turbo.js",
         "src/osd.js",
         "src/smooth.js",
+        "src/hires.js",
         "src/seed.js",
         "src/inspect.js",
         "src/main.js"
