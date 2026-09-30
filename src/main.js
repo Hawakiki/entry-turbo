@@ -7,6 +7,7 @@
 /**
  * The answer to the popup's status request (popup/popup.js renders it). Only `installed` is there before Entry is.
  * @typedef {object} TurboStatus
+ * @property {number} [api] The shape of this status and of the settings (STATUS_API); missing before v0.3.0-rc.2.
  * @property {boolean} installed The compiler is installed in this frame.
  * @property {string} [url] This frame's address.
  * @property {string} [type] Entry.type: 'workspace', 'minimize' (player) ...
@@ -80,11 +81,16 @@
     }
   }
 
+  // bumped when the status or the settings change shape: the popup is read from disk each time it opens, these page
+  // scripts only when the extension is reloaded, so a popup can meet an older page script (popup.js STATUS_API)
+  const STATUS_API = 2
+
   /** @returns {TurboStatus} what the popup shows for this frame */
   function status() {
     if (!turbo)
       return { installed: false }
     return {
+      api: STATUS_API,
       installed: true,
       url: location.href,
       type: Entry.type,

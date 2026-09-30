@@ -5,6 +5,8 @@ const DEFAULTS = { enabled: true, compile: true, deferViews: true, deepRecursion
 // the checkboxes; seed is a number box, hiresMax a list and volume a slider of their own
 const SWITCHES = Object.keys(DEFAULTS).filter(k => typeof DEFAULTS[k] === 'boolean')
 const $ = id => document.getElementById(id)
+// the status shape this popup reads (src/main.js STATUS_API)
+const STATUS_API = 2
 const SEED_MAX = 4294967295
 let savedSeed = DEFAULTS.seed
 
@@ -18,11 +20,22 @@ chrome.storage.local.get(DEFAULTS, (settings) => {
   $('volumeValue').textContent = `${settings.volume}%`
   syncSubs()
 })
-// shown while dragging, saved when let go
+// follows the slider while it is dragged, like a player's volume: saved at most every 40 ms (each save reaches the page
+// through bridge.js), and once more when let go
+let volumeTimer = 0
+function saveVolume() {
+  volumeTimer = 0
+  chrome.storage.local.set({ volume: Number($('volume').value) })
+}
 $('volume').addEventListener('input', () => {
   $('volumeValue').textContent = `${$('volume').value}%`
+  if (!volumeTimer)
+    volumeTimer = setTimeout(saveVolume, 40)
 })
-$('volume').addEventListener('change', () => chrome.storage.local.set({ volume: Number($('volume').value) }))
+$('volume').addEventListener('change', () => {
+  clearTimeout(volumeTimer)
+  saveVolume()
+})
 for (const k of SWITCHES) {
   $(k).addEventListener('change', () => {
     chrome.storage.local.set({ [k]: $(k).checked })
@@ -123,7 +136,12 @@ async function refresh() {
   }
   chrome.tabs.sendMessage(tab.id, { type: 'status' }, (st) => {
     if (chrome.runtime.lastError || !st) {
-      $('status').innerHTML = '<p class="muted">이 탭에서 엔트리를 찾지 못했습니다. playentry.org 작품이나 만들기 화면을 열고, 불러올 때까지 기다려 주세요.</p>'
+      $('status').innerHTML = '<p class="muted">이 탭에서 엔트리를 찾지 못했습니다. playentry.org 작품이나 만들기 화면을 열고, 불러올 때까지 기다려 주세요. 확장을 방금 새로고침했다면 이 탭도 새로고침하세요.</p>'
+      return
+    }
+    // this popup is newer than the scripts running in the page (the extension was updated but not reloaded)
+    if (st.api !== STATUS_API) {
+      $('status').innerHTML = '<p class="warn">이 탭에는 예전 버전의 엔트리 터보가 돌고 있습니다. <code>chrome://extensions</code> 에서 엔트리 터보의 새로고침(↻)을 누른 뒤, 이 탭을 새로고침하세요.</p>'
       return
     }
     render(st)
