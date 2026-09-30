@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "엔트리 터보 (비공식)",
-  "version": "0.3.0.1",
-  "version_name": "0.3.0-rc.1",
+  "version": "0.3.0.2",
+  "version_name": "0.3.0-rc.2",
   "description": "엔트리 작품의 블록을 JS로 바꿔 빠르게 실행합니다. 결과는 원래 실행과 같게 맞춥니다.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAowOZJY6gGpsngEMXU+ZdL6qOPLJdlVJVAmbR8Bk+eovQSYfPbB5NEVgR7qjM5dUdRslXXOexOCERUQ10TEeCuYJz2iJnFpNxdI77wHCmavkCa4ubCwHK198u67R98tQljDFGQyAOvlxz6Fy+/Wfdxc7jewjAdZMKAA+TzFQCBFreAs1+4LqYBaVmojsHodh237klHft8wSkf3mtsGSvy8FoSruspEC6Ivx3peZkcseve3xTnRAw78P+WAJuoMzXQhLfxcHH46QCcbjZVHVQHT9mThOA9b/b6mqe0CkQ3Tgx7sXQMYZaobAtZPRlBnwi0e4v+BJbkqBS48PkDqyQtkQIDAQAB",
   "permissions": [
